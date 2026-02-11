@@ -1,5 +1,5 @@
-// Profile Picture Upload Component
-import React from 'react';
+// Profile Picture Upload Component - Material Design 3
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,12 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Animated,
+  Pressable,
 } from 'react-native';
-import { LucideCamera, LucideImage, LucideTrash2, LucideX, LucideUser } from 'lucide-react-native';
+import { LucideCamera, LucideImage, LucideTrash2, LucideX, LucideUser, LucidePencil } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const ProfilePictureUpload = ({
   imageUri,
@@ -22,7 +24,57 @@ const ProfilePictureUpload = ({
   loading = false,
   editable = true,
 }) => {
+  const { colors, spacing, borderRadius, typography } = useTheme();
   const [showOptions, setShowOptions] = React.useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const modalSlideAnim = useRef(new Animated.Value(300)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
+  const animatePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const animatePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const openModal = () => {
+    setShowOptions(true);
+    Animated.parallel([
+      Animated.spring(modalSlideAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 65,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeModal = () => {
+    Animated.parallel([
+      Animated.timing(modalSlideAnim, {
+        toValue: 300,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setShowOptions(false));
+  };
 
   const requestPermissions = async (type) => {
     if (type === 'camera') {
@@ -45,7 +97,7 @@ const ProfilePictureUpload = ({
     const hasPermission = await requestPermissions('camera');
     if (!hasPermission) return;
 
-    setShowOptions(false);
+    closeModal();
     
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
@@ -63,7 +115,7 @@ const ProfilePictureUpload = ({
     const hasPermission = await requestPermissions('gallery');
     if (!hasPermission) return;
 
-    setShowOptions(false);
+    closeModal();
     
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -78,7 +130,7 @@ const ProfilePictureUpload = ({
   };
 
   const handleRemove = () => {
-    setShowOptions(false);
+    closeModal();
     Alert.alert(
       'Remove Photo',
       'Are you sure you want to remove your profile photo?',
@@ -89,81 +141,181 @@ const ProfilePictureUpload = ({
     );
   };
 
+  const OptionButton = ({ icon, label, color, onPress, destructive }) => (
+    <Pressable
+      style={({ pressed }) => [
+        styles.optionItem,
+        { 
+          padding: spacing.lg,
+          backgroundColor: pressed ? colors.surfaceContainerHighest : 'transparent',
+        },
+      ]}
+      onPress={onPress}
+    >
+      <View style={[
+        styles.optionIcon, 
+        { 
+          backgroundColor: destructive ? colors.errorContainer : colors.primaryContainer,
+          borderRadius: borderRadius.full,
+        }
+      ]}>
+        {React.cloneElement(icon, { 
+          size: 24, 
+          color: destructive ? colors.error : colors.primary 
+        })}
+      </View>
+      <Text style={[
+        styles.optionText, 
+        { 
+          color: destructive ? colors.error : colors.onSurface,
+          ...typography.bodyLarge,
+          marginLeft: spacing.lg,
+        }
+      ]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+
   return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={[styles.avatarContainer, { width: size, height: size }]}
-        onPress={() => editable && setShowOptions(true)}
+    <View style={[styles.container, { marginBottom: spacing.lg }]}>
+      <Pressable
+        onPressIn={animatePressIn}
+        onPressOut={animatePressOut}
+        onPress={() => editable && openModal()}
         disabled={!editable || loading}
       >
-        {loading ? (
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        ) : imageUri ? (
-          <Image
-            source={{ uri: imageUri }}
-            style={[styles.avatar, { width: size, height: size }]}
-          />
-        ) : (
-          <View style={[styles.placeholder, { width: size, height: size }]}>
-            <LucideUser size={size * 0.4} color={COLORS.gray[400]} />
-          </View>
-        )}
-        
-        {editable && !loading && (
-          <View style={styles.cameraOverlay}>
-            <LucideCamera size={20} color={COLORS.white} />
-          </View>
-        )}
-      </TouchableOpacity>
+        <Animated.View 
+          style={[
+            styles.avatarContainer, 
+            { 
+              width: size, 
+              height: size,
+              borderRadius: size / 2,
+              backgroundColor: colors.surfaceContainerHighest,
+              transform: [{ scale: scaleAnim }],
+            }
+          ]}
+        >
+          {loading ? (
+            <ActivityIndicator size="large" color={colors.primary} />
+          ) : imageUri ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}
+            />
+          ) : (
+            <View style={[
+              styles.placeholder, 
+              { 
+                width: size, 
+                height: size, 
+                borderRadius: size / 2,
+                backgroundColor: colors.primaryContainer,
+              }
+            ]}>
+              <LucideUser size={size * 0.4} color={colors.onPrimaryContainer} />
+            </View>
+          )}
+          
+          {editable && !loading && (
+            <View style={[
+              styles.editOverlay,
+              {
+                backgroundColor: colors.primary,
+                borderColor: colors.surface,
+                borderRadius: borderRadius.full,
+              }
+            ]}>
+              <LucidePencil size={16} color={colors.onPrimary} />
+            </View>
+          )}
+        </Animated.View>
+      </Pressable>
 
       {editable && (
-        <Text style={styles.hint}>Tap to {imageUri ? 'change' : 'add'} photo</Text>
+        <Text style={[
+          styles.hint, 
+          { 
+            marginTop: spacing.sm,
+            color: colors.onSurfaceVariant,
+            ...typography.bodySmall,
+          }
+        ]}>
+          Tap to {imageUri ? 'change' : 'add'} photo
+        </Text>
       )}
 
       {/* Options Modal */}
       <Modal
         visible={showOptions}
         transparent
-        animationType="slide"
-        onRequestClose={() => setShowOptions(false)}
+        animationType="none"
+        onRequestClose={closeModal}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowOptions(false)}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Profile Photo</Text>
-              <TouchableOpacity onPress={() => setShowOptions(false)}>
-                <LucideX size={24} color={COLORS.gray[700]} />
+        <View style={styles.modalContainer}>
+          <Animated.View 
+            style={[
+              styles.modalBackdrop,
+              { opacity: backdropAnim }
+            ]}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeModal} />
+          </Animated.View>
+          
+          <Animated.View style={[
+            styles.modalContent,
+            {
+              backgroundColor: colors.surfaceContainerLow,
+              borderTopLeftRadius: borderRadius.extraLarge,
+              borderTopRightRadius: borderRadius.extraLarge,
+              transform: [{ translateY: modalSlideAnim }],
+            }
+          ]}>
+            <View style={styles.handleContainer}>
+              <View style={[styles.handle, { backgroundColor: colors.outlineVariant }]} />
+            </View>
+            
+            <View style={[
+              styles.modalHeader, 
+              { 
+                padding: spacing.lg,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.outlineVariant,
+              }
+            ]}>
+              <Text style={[styles.modalTitle, { color: colors.onSurface, ...typography.titleLarge }]}>
+                Profile Photo
+              </Text>
+              <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
+                <LucideX size={24} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.optionItem} onPress={takePhoto}>
-              <View style={[styles.optionIcon, { backgroundColor: COLORS.primary }]}>
-                <LucideCamera size={24} color={COLORS.white} />
-              </View>
-              <Text style={styles.optionText}>Take Photo</Text>
-            </TouchableOpacity>
+            <OptionButton 
+              icon={<LucideCamera />} 
+              label="Take Photo" 
+              onPress={takePhoto}
+            />
 
-            <TouchableOpacity style={styles.optionItem} onPress={chooseFromGallery}>
-              <View style={[styles.optionIcon, { backgroundColor: COLORS.success }]}>
-                <LucideImage size={24} color={COLORS.white} />
-              </View>
-              <Text style={styles.optionText}>Choose from Gallery</Text>
-            </TouchableOpacity>
+            <OptionButton 
+              icon={<LucideImage />} 
+              label="Choose from Gallery" 
+              onPress={chooseFromGallery}
+            />
 
             {imageUri && (
-              <TouchableOpacity style={styles.optionItem} onPress={handleRemove}>
-                <View style={[styles.optionIcon, { backgroundColor: COLORS.error }]}>
-                  <LucideTrash2 size={24} color={COLORS.white} />
-                </View>
-                <Text style={[styles.optionText, { color: COLORS.error }]}>Remove Photo</Text>
-              </TouchableOpacity>
+              <OptionButton 
+                icon={<LucideTrash2 />} 
+                label="Remove Photo" 
+                onPress={handleRemove}
+                destructive
+              />
             )}
-          </View>
-        </TouchableOpacity>
+            
+            <View style={{ height: spacing.xxxl }} />
+          </Animated.View>
+        </View>
       </Modal>
     </View>
   );
@@ -172,79 +324,74 @@ const ProfilePictureUpload = ({
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    marginBottom: SPACING.lg,
   },
   avatarContainer: {
-    borderRadius: BORDER_RADIUS.full,
     overflow: 'hidden',
-    backgroundColor: COLORS.gray[100],
-    ...SHADOWS.md,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  avatar: {
-    borderRadius: BORDER_RADIUS.full,
-  },
+  avatar: {},
   placeholder: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.gray[200],
-    borderRadius: BORDER_RADIUS.full,
   },
-  cameraOverlay: {
+  editOverlay: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: COLORS.primary,
-    borderRadius: BORDER_RADIUS.full,
-    padding: SPACING.sm,
+    bottom: 4,
+    right: 4,
+    padding: 8,
     borderWidth: 3,
-    borderColor: COLORS.white,
   },
   hint: {
-    marginTop: SPACING.sm,
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.gray[500],
+    textAlign: 'center',
   },
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
   modalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
-    paddingBottom: SPACING.xxxl,
+    paddingBottom: 16,
+  },
+  handleContainer: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  handle: {
+    width: 32,
+    height: 4,
+    borderRadius: 2,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[200],
   },
   modalTitle: {
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
+    fontWeight: '600',
+  },
+  closeButton: {
+    padding: 4,
   },
   optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.lg,
   },
   optionIcon: {
     width: 48,
     height: 48,
-    borderRadius: BORDER_RADIUS.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.lg,
   },
   optionText: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    fontWeight: '500',
   },
 });
 

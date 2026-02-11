@@ -1,28 +1,59 @@
 // Forgot Password Screen
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
+  Animated,
 } from 'react-native';
 import { LucideArrowLeft, LucideMail, LucideCheckCircle } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { validateEmail } from '../../utils/validation';
-import { CustomInput, LoadingSpinner, Toast } from '../../components/common';
+import { 
+  CustomInput, 
+  LoadingSpinner, 
+  Toast, 
+  M3Button, 
+  ButtonVariant, 
+  M3LoadingDialog,
+  M3ErrorDialog,
+} from '../../components/common';
 
 export default function ForgotPasswordScreen({ navigation }) {
+  const { colors, spacing, borderRadius, isDark } = useTheme();
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  const [errorDialog, setErrorDialog] = useState({ visible: false, title: '', message: '' });
+
+  // Animation effect
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const handleResetPassword = async () => {
     // Validate email
@@ -72,12 +103,7 @@ export default function ForgotPasswordScreen({ navigation }) {
         errorMessage = 'Network error. Please check your internet connection.';
       }
       
-      Alert.alert(
-        errorTitle,
-        errorMessage,
-        [{ text: 'OK' }],
-        { cancelable: true }
-      );
+      setErrorDialog({ visible: true, title: errorTitle, message: errorMessage });
     } finally {
       setLoading(false);
     }
@@ -89,50 +115,59 @@ export default function ForgotPasswordScreen({ navigation }) {
 
   if (sent) {
     return (
-      <View style={styles.container}>
-        <View style={styles.successContainer}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Animated.View style={[
+          styles.successContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}>
           <View style={styles.successIcon}>
-            <LucideCheckCircle size={64} color={COLORS.success} />
+            <LucideCheckCircle size={64} color={colors.secondary} />
           </View>
           
-          <Text style={styles.successTitle}>Check Your Email</Text>
+          <Text style={[styles.successTitle, { color: colors.onSurface }]}>Check Your Email</Text>
           
-          <Text style={styles.successText}>
+          <Text style={[styles.successText, { color: colors.onSurfaceVariant }]}>
             We've sent a password reset link to:
           </Text>
-          <Text style={styles.emailText}>{email}</Text>
+          <Text style={[styles.emailText, { color: colors.primary }]}>{email}</Text>
           
-          <Text style={styles.instructionText}>
+          <Text style={[styles.instructionText, { color: colors.onSurfaceVariant }]}>
             Click the link in the email to reset your password. 
             If you don't see it, check your spam folder.
           </Text>
 
-          <TouchableOpacity
-            style={styles.backButton}
+          <Pressable
+            style={({ pressed }) => [
+              styles.backButton,
+              { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 }
+            ]}
             onPress={() => navigation.navigate('Login')}
           >
-            <Text style={styles.backButtonText}>Back to Login</Text>
-          </TouchableOpacity>
+            <Text style={[styles.backButtonText, { color: colors.onPrimary }]}>Back to Login</Text>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             style={styles.resendLink}
             onPress={() => {
               setSent(false);
               handleResetPassword();
             }}
           >
-            <Text style={styles.resendLinkText}>
+            <Text style={[styles.resendLinkText, { color: colors.primary }]}>
               Didn't receive the email? Resend
             </Text>
-          </TouchableOpacity>
-        </View>
+          </Pressable>
+        </Animated.View>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
@@ -141,26 +176,39 @@ export default function ForgotPasswordScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         {/* Back Button */}
-        <TouchableOpacity
+        <Pressable
           style={styles.backArrow}
           onPress={() => navigation.goBack()}
         >
-          <LucideArrowLeft size={24} color={COLORS.text.primary} />
-        </TouchableOpacity>
+          <LucideArrowLeft size={24} color={colors.onSurface} />
+        </Pressable>
 
         {/* Header */}
-        <View style={styles.headerContainer}>
-          <View style={styles.iconCircle}>
-            <LucideMail size={40} color={COLORS.primary} />
+        <Animated.View style={[
+          styles.headerContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}>
+          <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>
+            <LucideMail size={40} color={colors.primary} />
           </View>
-          <Text style={styles.title}>Forgot Password?</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: colors.onSurface }]}>Forgot Password?</Text>
+          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
             No worries! Enter your email address and we'll send you a link to reset your password.
           </Text>
-        </View>
+        </Animated.View>
 
         {/* Form Card */}
-        <View style={styles.formCard}>
+        <Animated.View style={[
+          styles.formCard,
+          {
+            backgroundColor: colors.surface,
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}>
           <CustomInput
             label="Email Address"
             value={email}
@@ -172,33 +220,28 @@ export default function ForgotPasswordScreen({ navigation }) {
             error={error}
             keyboardType="email-address"
             autoCapitalize="none"
-            leftIcon={<LucideMail size={20} color={COLORS.gray[500]} />}
+            leftIcon={<LucideMail size={20} color={colors.onSurfaceVariant} />}
           />
 
-          <TouchableOpacity
-            style={[
-              styles.resetButton,
-              !email && styles.resetButtonDisabled,
-            ]}
+          <M3Button
+            variant={ButtonVariant.FILLED}
             onPress={handleResetPassword}
             disabled={loading || !email}
+            loading={loading}
+            style={{ marginTop: 12 }}
           >
-            {loading ? (
-              <LoadingSpinner visible size="small" color={COLORS.white} />
-            ) : (
-              <Text style={styles.resetButtonText}>Send Reset Link</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+            Send Reset Link
+          </M3Button>
+        </Animated.View>
 
         {/* Back to Login */}
-        <TouchableOpacity
+        <Pressable
           style={styles.loginLink}
           onPress={() => navigation.navigate('Login')}
         >
-          <LucideArrowLeft size={16} color={COLORS.primary} />
-          <Text style={styles.loginLinkText}>Back to Login</Text>
-        </TouchableOpacity>
+          <LucideArrowLeft size={16} color={colors.primary} />
+          <Text style={[styles.loginLinkText, { color: colors.primary }]}>Back to Login</Text>
+        </Pressable>
       </ScrollView>
 
       {/* Toast */}
@@ -210,10 +253,17 @@ export default function ForgotPasswordScreen({ navigation }) {
       />
 
       {/* Loading Overlay */}
-      <LoadingSpinner
+      <M3LoadingDialog
         visible={loading}
         message="Sending reset link..."
-        overlay
+      />
+      
+      {/* Error Dialog */}
+      <M3ErrorDialog
+        visible={errorDialog.visible}
+        title={errorDialog.title}
+        message={errorDialog.message}
+        onDismiss={() => setErrorDialog({ visible: false, title: '', message: '' })}
       />
     </KeyboardAvoidingView>
   );
@@ -222,130 +272,128 @@ export default function ForgotPasswordScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background.light,
   },
   scrollContent: {
     flexGrow: 1,
-    padding: SPACING.xl,
-    paddingTop: SPACING.xxxl,
+    padding: 24,
+    paddingTop: 48,
   },
   backArrow: {
-    marginBottom: SPACING.xl,
+    marginBottom: 24,
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: SPACING.xxl,
+    marginBottom: 32,
   },
   iconCircle: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: COLORS.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
-    ...SHADOWS.md,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   title: {
-    fontSize: TYPOGRAPHY.fontSize.xxl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
-    marginBottom: SPACING.sm,
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
+    fontSize: 16,
     textAlign: 'center',
     lineHeight: 22,
   },
   formCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.xl,
-    ...SHADOWS.md,
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   resetButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
-    marginTop: SPACING.md,
-    ...SHADOWS.md,
-  },
-  resetButtonDisabled: {
-    backgroundColor: COLORS.gray[400],
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   resetButtonText: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    fontSize: 18,
+    fontWeight: '700',
   },
   loginLink: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: SPACING.xxl,
+    marginTop: 32,
   },
   loginLinkText: {
-    marginLeft: SPACING.xs,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    marginLeft: 6,
+    fontSize: 16,
+    fontWeight: '500',
   },
   // Success screen styles
   successContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SPACING.xl,
+    padding: 24,
   },
   successIcon: {
-    marginBottom: SPACING.xl,
+    marginBottom: 24,
   },
   successTitle: {
-    fontSize: TYPOGRAPHY.fontSize.xxl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
-    marginBottom: SPACING.md,
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 12,
   },
   successText: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
-    marginBottom: SPACING.xs,
+    fontSize: 16,
+    marginBottom: 6,
   },
   emailText: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    marginBottom: SPACING.lg,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 16,
   },
   instructionText: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.text.secondary,
+    fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: SPACING.xxl,
+    marginBottom: 32,
   },
   backButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.xxxl,
-    borderRadius: BORDER_RADIUS.md,
-    ...SHADOWS.md,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   backButtonText: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    fontSize: 18,
+    fontWeight: '700',
   },
   resendLink: {
-    marginTop: SPACING.xl,
+    marginTop: 24,
   },
   resendLinkText: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    fontSize: 16,
+    fontWeight: '500',
   },
 });

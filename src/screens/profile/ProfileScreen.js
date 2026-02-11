@@ -1,16 +1,18 @@
 // Complete Profile Screen with all user information and edit capabilities
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   RefreshControl,
   Alert,
   Modal,
   Switch,
+  Animated,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   LucideUser,
   LucideMail,
@@ -31,10 +33,12 @@ import {
   LucideCar,
   LucideCreditCard,
   LucideHistory,
+  LucideSun,
+  LucideMoon,
 } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+import { useTheme, ThemeMode } from '../../context/ThemeContext';
 import SwipeableScreen from '../../components/common/SwipeableScreen';
 import { uploadProfilePicture, deleteProfilePicture } from '../../utils/imageHelpers';
 import { clearAllData } from '../../utils/storage';
@@ -45,11 +49,21 @@ import {
   Toast,
   CustomInput,
   PhoneInput,
+  M3ConfirmDialog,
+  M3Button,
+  M3TextField,
 } from '../../components/common';
+import M3Dialog from '../../components/common/M3Dialog';
 import { validateName, validatePhone, validateAddress } from '../../utils/validation';
 
 export default function ProfileScreen() {
   const { profile, signOut, user, refreshProfile } = useAuth();
+  const { colors, spacing, borderRadius, isDark, themeMode, updateThemeMode } = useTheme();
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const cardAnims = useRef([...Array(5)].map(() => new Animated.Value(0))).current;
   
   // State
   const [refreshing, setRefreshing] = useState(false);
@@ -76,6 +90,16 @@ export default function ProfileScreen() {
   
   // Toast
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  
+  // M3 Dialog states
+  const [logoutDialog, setLogoutDialog] = useState(false);
+  
+  // Delete account dialog states
+  const [deleteDialog, setDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Fetch user data
   const fetchUserData = async () => {
@@ -164,6 +188,34 @@ export default function ProfileScreen() {
   useEffect(() => {
     fetchUserData();
   }, [user?.id]);
+
+  // Animation effect
+  useEffect(() => {
+    // Header fade in
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Stagger card animations
+    const cardAnimations = cardAnims.map((anim, index) =>
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 300,
+        delay: 200 + index * 100,
+        useNativeDriver: true,
+      })
+    );
+    Animated.stagger(100, cardAnimations).start();
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -364,106 +416,154 @@ export default function ProfileScreen() {
 
   // Handle logout
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            await clearAllData();
-            await signOut(false); // Pass false to skip double confirmation
-          },
-        },
-      ]
-    );
+    setLogoutDialog(true);
+  };
+  
+  // Execute logout
+  const executeLogout = async () => {
+    setLogoutDialog(false);
+    await clearAllData();
+    await signOut(false); // Pass false to skip double confirmation
   };
 
   // Handle delete account
   const handleDeleteAccount = () => {
-    Alert.alert(
-      '⚠️ Delete Account',
-      'This action cannot be undone. All your data will be permanently deleted. Are you absolutely sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Forever',
-          style: 'destructive',
-          onPress: () => {
-            // Second confirmation
-            Alert.alert(
-              'Final Confirmation',
-              'This will delete your account, trip history, and all associated data permanently.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'I Understand, Delete',
-                  style: 'destructive',
-                  onPress: async () => {
-                    setLoading(true);
-                    try {
-                      // Delete user's trip data
-                      if (user?.id) {
-                        const role = userData?.role || profile?.role;
-                        
-                        if (role === 'driver') {
-                          // Get driver's cars
-                          const { data: cars } = await supabase
-                            .from('cars')
-                            .select('id')
-                            .eq('driver_id', user.id);
-                          
-                          if (cars?.length) {
-                            const carIds = cars.map(c => c.id);
-                            // Delete trips associated with driver's cars
-                            await supabase
-                              .from('trips')
-                              .delete()
-                              .in('car_id', carIds);
-                            // Delete cars
-                            await supabase
-                              .from('cars')
-                              .delete()
-                              .eq('driver_id', user.id);
-                          }
-                        } else {
-                          // Delete passenger's trips
-                          await supabase
-                            .from('trips')
-                            .delete()
-                            .eq('passenger_id', user.id);
-                        }
-
-                        // Delete user profile
-                        await supabase
-                          .from('users')
-                          .delete()
-                          .eq('id', user.id);
-                      }
-
-                      await clearAllData();
-                      showToastMessage('Account deleted successfully.', 'success');
-                      
-                      // Sign out after brief delay for toast
-                      setTimeout(async () => {
-                        await signOut(false);
-                      }, 1500);
-                    } catch (err) {
-                      console.error('Delete account error:', err);
-                      showToastMessage('Failed to delete account. Please contact support.', 'error');
-                    } finally {
-                      setLoading(false);
-                    }
-                  },
-                },
-              ]
-            );
-          },
-        },
-      ]
-    );
+    setDeleteConfirmText('');
+    setDeletePassword('');
+    setDeleteError('');
+    setDeleteDialog(true);
+  };
+  
+  // Close delete dialog
+  const closeDeleteDialog = () => {
+    setDeleteDialog(false);
+    setDeleteConfirmText('');
+    setDeletePassword('');
+    setDeleteError('');
+    setDeleteLoading(false);
+  };
+  
+  // Check if delete button should be enabled
+  const isDeleteEnabled = deleteConfirmText === 'DELETE' && deletePassword.length >= 6;
+  
+  // Execute delete with password verification
+  const executeDeleteAccount = async () => {
+    if (!isDeleteEnabled) return;
+    
+    setDeleteLoading(true);
+    setDeleteError('');
+    
+    try {
+      const userEmail = profile?.email || user?.email;
+      
+      // STEP 1: Verify password
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: deletePassword,
+      });
+      
+      if (authError) {
+        setDeleteError('Incorrect password. Please try again.');
+        setDeleteLoading(false);
+        return;
+      }
+      
+      const userId = user?.id;
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+      
+      console.log('Starting cascading deletion for user:', userId);
+      
+      // STEP 2: Delete from trips table (user can be driver OR passenger)
+      const { error: tripsError } = await supabase
+        .from('trips')
+        .delete()
+        .or(`passenger_id.eq.${userId}`);
+      
+      if (tripsError) {
+        console.error('Error deleting trips:', tripsError);
+        // Continue even if trips deletion has issues
+      }
+      
+      // STEP 3: Get user's car IDs for fare_settings deletion
+      const { data: userCars } = await supabase
+        .from('cars')
+        .select('id')
+        .eq('driver_id', userId);
+      
+      // STEP 4: Delete fare_settings for user's cars
+      if (userCars && userCars.length > 0) {
+        const carIds = userCars.map(car => car.id);
+        
+        for (const carId of carIds) {
+          const { error: fareError } = await supabase
+            .from('fare_settings')
+            .delete()
+            .eq('car_id', carId);
+          
+          if (fareError) {
+            console.error('Error deleting fare_settings for car:', carId, fareError);
+          }
+        }
+        
+        // Also delete trips associated with driver's cars
+        const { error: driverTripsError } = await supabase
+          .from('trips')
+          .delete()
+          .in('car_id', carIds);
+        
+        if (driverTripsError) {
+          console.error('Error deleting driver trips:', driverTripsError);
+        }
+      }
+      
+      // STEP 5: Delete from cars table
+      const { error: carsError } = await supabase
+        .from('cars')
+        .delete()
+        .eq('driver_id', userId);
+      
+      if (carsError) {
+        console.error('Error deleting cars:', carsError);
+      }
+      
+      // STEP 6: Delete from users table
+      const { error: userDeleteError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+      
+      if (userDeleteError) {
+        console.error('Error deleting user:', userDeleteError);
+        throw new Error('Failed to delete user profile from database.');
+      }
+      
+      console.log('User profile deleted from database');
+      
+      // STEP 7: Store deleted user ID locally to prevent re-creation
+      await AsyncStorage.setItem(`@deleted_user_${userId}`, 'true');
+      
+      // STEP 8: Clear all local data
+      await clearAllData();
+      
+      // Close dialog
+      closeDeleteDialog();
+      
+      // Show success message
+      showToastMessage('Your account has been permanently deleted.', 'success');
+      
+      // STEP 9: Sign out (this will navigate to login screen)
+      setTimeout(async () => {
+        await signOut(false);
+      }, 1000);
+      
+    } catch (err) {
+      console.error('Delete account error:', err);
+      setDeleteError(err.message || 'Failed to delete account. Please try again or contact support.');
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   // Show toast
@@ -492,18 +592,45 @@ export default function ProfileScreen() {
 
   const data = userData || profile;
 
+  // Get theme mode label
+  const getThemeModeLabel = () => {
+    switch (themeMode) {
+      case ThemeMode.LIGHT: return 'Light';
+      case ThemeMode.DARK: return 'Dark';
+      default: return 'System';
+    }
+  };
+
+  // Cycle through theme modes
+  const cycleThemeMode = () => {
+    if (themeMode === ThemeMode.SYSTEM) updateThemeMode(ThemeMode.LIGHT);
+    else if (themeMode === ThemeMode.LIGHT) updateThemeMode(ThemeMode.DARK);
+    else updateThemeMode(ThemeMode.SYSTEM);
+  };
+
   return (
     <SwipeableScreen>
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
         }
       >
         {/* Profile Header */}
-        <View style={styles.header}>
+        <Animated.View style={[
+          styles.header,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}>
           <ProfilePictureUpload
             imageUri={data?.profile_picture_url}
             onImageSelected={handleProfilePictureUpdate}
@@ -512,185 +639,323 @@ export default function ProfileScreen() {
             loading={loading}
           />
           
-          <Text style={styles.userName}>{data?.full_name || 'User'}</Text>
-          <Text style={styles.userEmail}>{data?.email}</Text>
+          <Text style={[styles.userName, { color: colors.onSurface }]}>{data?.full_name || 'User'}</Text>
+          <Text style={[styles.userEmail, { color: colors.onSurfaceVariant }]}>{data?.email}</Text>
           
           <RoleBadge role={data?.role} size="medium" />
           
           <View style={styles.memberSince}>
-            <LucideCalendar size={14} color={COLORS.gray[500]} />
-            <Text style={styles.memberSinceText}>
+            <LucideCalendar size={14} color={colors.onSurfaceVariant} />
+            <Text style={[styles.memberSinceText, { color: colors.onSurfaceVariant }]}>
               Member since {formatDate(data?.created_at)}
             </Text>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Personal Information Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <LucideUser size={20} color={COLORS.primary} />
-            <Text style={styles.cardTitle}>Personal Information</Text>
+        <Animated.View style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.card,
+            opacity: cardAnims[0],
+            transform: [{ translateY: cardAnims[0].interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0],
+            }) }],
+          }
+        ]}>
+          <View style={[styles.cardHeader, { borderBottomColor: colors.outlineVariant }]}>
+            <LucideUser size={20} color={colors.primary} />
+            <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Personal Information</Text>
           </View>
           
           <InfoItem
-            icon={<LucideUser size={18} color={COLORS.gray[500]} />}
+            icon={<LucideUser size={18} color={colors.onSurfaceVariant} />}
             label="Full Name"
             value={data?.full_name}
             onEdit={() => openEditModal('full_name', data?.full_name)}
+            colors={colors}
           />
           
           <InfoItem
-            icon={<LucideMail size={18} color={COLORS.gray[500]} />}
+            icon={<LucideMail size={18} color={colors.onSurfaceVariant} />}
             label="Email"
             value={data?.email}
             verified={true}
             editable={false}
+            colors={colors}
           />
           
           <InfoItem
-            icon={<LucidePhone size={18} color={COLORS.gray[500]} />}
+            icon={<LucidePhone size={18} color={colors.onSurfaceVariant} />}
             label="Phone Number"
             value={data?.phone ? `+91 ${data.phone}` : 'Not set'}
             onEdit={() => openEditModal('phone', data?.phone)}
+            colors={colors}
           />
           
           <InfoItem
-            icon={<LucideMapPin size={18} color={COLORS.gray[500]} />}
+            icon={<LucideMapPin size={18} color={colors.onSurfaceVariant} />}
             label="Home Address"
             value={data?.home_address || 'Not set'}
             onEdit={() => openEditModal('home_address', data?.home_address)}
             isLast
+            colors={colors}
           />
-        </View>
+        </Animated.View>
 
         {/* Emergency Contact Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <LucideShield size={20} color={COLORS.warning} />
-            <Text style={styles.cardTitle}>Emergency Contact</Text>
+        <Animated.View style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            opacity: cardAnims[1],
+            transform: [{ translateY: cardAnims[1].interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0],
+            }) }],
+          }
+        ]}>
+          <View style={[styles.cardHeader, { borderBottomColor: colors.outlineVariant }]}>
+            <LucideShield size={20} color={colors.tertiary} />
+            <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Emergency Contact</Text>
           </View>
           
           <InfoItem
-            icon={<LucideUser size={18} color={COLORS.gray[500]} />}
+            icon={<LucideUser size={18} color={colors.onSurfaceVariant} />}
             label="Contact Name"
             value={data?.emergency_contact_name || 'Not set'}
             onEdit={() => openEditModal('emergency_contact_name', data?.emergency_contact_name)}
+            colors={colors}
           />
           
           <InfoItem
-            icon={<LucidePhone size={18} color={COLORS.gray[500]} />}
+            icon={<LucidePhone size={18} color={colors.onSurfaceVariant} />}
             label="Contact Phone"
             value={data?.emergency_contact_phone ? `+91 ${data.emergency_contact_phone}` : 'Not set'}
             onEdit={() => openEditModal('emergency_contact_phone', data?.emergency_contact_phone)}
             isLast
+            colors={colors}
           />
-        </View>
+        </Animated.View>
 
         {/* Account Settings Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <LucideSettings size={20} color={COLORS.primary} />
-            <Text style={styles.cardTitle}>Account Settings</Text>
+        <Animated.View style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            opacity: cardAnims[2],
+            transform: [{ translateY: cardAnims[2].interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0],
+            }) }],
+          }
+        ]}>
+          <View style={[styles.cardHeader, { borderBottomColor: colors.outlineVariant }]}>
+            <LucideSettings size={20} color={colors.primary} />
+            <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Account Settings</Text>
           </View>
           
-          <TouchableOpacity
-            style={styles.settingItem}
+          <Pressable
+            style={({ pressed }) => [
+              styles.settingItem,
+              { borderBottomColor: colors.outlineVariant },
+              pressed && { backgroundColor: colors.surfaceVariant }
+            ]}
             onPress={() => setPasswordModalVisible(true)}
           >
             <View style={styles.settingLeft}>
-              <LucideLock size={18} color={COLORS.gray[500]} />
-              <Text style={styles.settingLabel}>Change Password</Text>
+              <LucideLock size={18} color={colors.onSurfaceVariant} />
+              <Text style={[styles.settingLabel, { color: colors.onSurface }]}>Change Password</Text>
             </View>
-            <LucideChevronRight size={18} color={COLORS.gray[400]} />
-          </TouchableOpacity>
-          
-          <View style={styles.settingItem}>
+            <LucideChevronRight size={18} color={colors.onSurfaceVariant} />
+          </Pressable>
+
+          {/* Theme Toggle */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.settingItem,
+              { borderBottomColor: colors.outlineVariant },
+              pressed && { backgroundColor: colors.surfaceVariant }
+            ]}
+            onPress={cycleThemeMode}
+          >
             <View style={styles.settingLeft}>
-              <LucideBell size={18} color={COLORS.gray[500]} />
-              <Text style={styles.settingLabel}>Push Notifications</Text>
+              {isDark ? (
+                <LucideMoon size={18} color={colors.onSurfaceVariant} />
+              ) : (
+                <LucideSun size={18} color={colors.onSurfaceVariant} />
+              )}
+              <Text style={[styles.settingLabel, { color: colors.onSurface }]}>Theme</Text>
+            </View>
+            <View style={styles.themeValue}>
+              <Text style={[styles.themeLabelText, { color: colors.primary }]}>{getThemeModeLabel()}</Text>
+              <LucideChevronRight size={18} color={colors.onSurfaceVariant} />
+            </View>
+          </Pressable>
+          
+          <View style={[styles.settingItem, { borderBottomColor: colors.outlineVariant }]}>
+            <View style={styles.settingLeft}>
+              <LucideBell size={18} color={colors.onSurfaceVariant} />
+              <Text style={[styles.settingLabel, { color: colors.onSurface }]}>Push Notifications</Text>
             </View>
             <Switch
               value={pushNotifications}
               onValueChange={setPushNotifications}
-              trackColor={{ false: COLORS.gray[300], true: COLORS.primaryLight }}
-              thumbColor={pushNotifications ? COLORS.primary : COLORS.gray[100]}
+              trackColor={{ false: colors.surfaceVariant, true: colors.primaryContainer }}
+              thumbColor={pushNotifications ? colors.primary : colors.outline}
             />
           </View>
           
           <View style={[styles.settingItem, styles.settingItemLast]}>
             <View style={styles.settingLeft}>
-              <LucideMail size={18} color={COLORS.gray[500]} />
-              <Text style={styles.settingLabel}>Email Notifications</Text>
+              <LucideMail size={18} color={colors.onSurfaceVariant} />
+              <Text style={[styles.settingLabel, { color: colors.onSurface }]}>Email Notifications</Text>
             </View>
             <Switch
               value={emailNotifications}
               onValueChange={setEmailNotifications}
-              trackColor={{ false: COLORS.gray[300], true: COLORS.primaryLight }}
-              thumbColor={emailNotifications ? COLORS.primary : COLORS.gray[100]}
+              trackColor={{ false: colors.surfaceVariant, true: colors.primaryContainer }}
+              thumbColor={emailNotifications ? colors.primary : colors.outline}
             />
           </View>
-        </View>
+        </Animated.View>
 
         {/* Statistics Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <LucideHistory size={20} color={COLORS.success} />
-            <Text style={styles.cardTitle}>Account Statistics</Text>
+        <Animated.View style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            opacity: cardAnims[3],
+            transform: [{ translateY: cardAnims[3].interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0],
+            }) }],
+          }
+        ]}>
+          <View style={[styles.cardHeader, { borderBottomColor: colors.outlineVariant }]}>
+            <LucideHistory size={20} color={colors.secondary} />
+            <Text style={[styles.cardTitle, { color: colors.onSurface }]}>Account Statistics</Text>
           </View>
           
           {data?.role === 'driver' ? (
             // Driver Stats
             <>
               <StatItem
-                icon={<LucideCar size={18} color={COLORS.primary} />}
+                icon={<LucideCar size={18} color={colors.primary} />}
                 label="Total Trips Hosted"
                 value={stats?.totalTrips || 0}
+                colors={colors}
               />
               <StatItem
-                icon={<LucideCreditCard size={18} color={COLORS.success} />}
+                icon={<LucideCreditCard size={18} color={colors.secondary} />}
                 label="Total Revenue"
                 value={`₹${stats?.totalRevenue?.toFixed(2) || '0.00'}`}
+                colors={colors}
               />
               <StatItem
-                icon={<LucideUser size={18} color={COLORS.info} />}
+                icon={<LucideUser size={18} color={colors.tertiary} />}
                 label="Active Passengers"
                 value={stats?.activePassengers || 0}
                 isLast
+                colors={colors}
               />
             </>
           ) : (
             // Passenger Stats
             <>
               <StatItem
-                icon={<LucideCar size={18} color={COLORS.primary} />}
+                icon={<LucideCar size={18} color={colors.primary} />}
                 label="Total Trips"
                 value={stats?.totalTrips || 0}
+                colors={colors}
               />
               <StatItem
-                icon={<LucideCreditCard size={18} color={COLORS.success} />}
+                icon={<LucideCreditCard size={18} color={colors.secondary} />}
                 label="Total Paid"
                 value={`₹${stats?.totalPaid?.toFixed(2) || '0.00'}`}
+                colors={colors}
               />
               <StatItem
-                icon={<LucideAlertCircle size={18} color={COLORS.warning} />}
+                icon={<LucideAlertCircle size={18} color={colors.tertiary} />}
                 label="Pending Payments"
                 value={`₹${stats?.pendingAmount?.toFixed(2) || '0.00'}`}
                 isLast
+                colors={colors}
               />
             </>
           )}
-        </View>
+        </Animated.View>
 
         {/* Action Buttons */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <LucideLogOut size={20} color={COLORS.white} />
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
+        <Animated.View style={{
+          opacity: cardAnims[4],
+          transform: [{ translateY: cardAnims[4].interpolate({
+            inputRange: [0, 1],
+            outputRange: [20, 0],
+          }) }],
+        }}>
+          <Pressable 
+            style={({ pressed }) => [
+              styles.logoutButton, 
+              { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 }
+            ]}
+            onPress={handleLogout}
+          >
+            <LucideLogOut size={20} color={colors.onPrimary} />
+            <Text style={[styles.logoutButtonText, { color: colors.onPrimary }]}>Logout</Text>
+          </Pressable>
+        </Animated.View>
 
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
-          <LucideTrash2 size={20} color={COLORS.error} />
-          <Text style={styles.deleteButtonText}>Delete Account</Text>
-        </TouchableOpacity>
+        {/* Danger Zone Card */}
+        <Animated.View style={[
+          styles.card,
+          styles.dangerZoneCard,
+          {
+            backgroundColor: isDark ? `${colors.error}15` : `${colors.error}08`,
+            borderColor: colors.error,
+            opacity: cardAnims[4],
+            transform: [{ translateY: cardAnims[4].interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0],
+            }) }],
+            marginTop: 16,
+          }
+        ]}>
+          <View style={[styles.cardHeader, { borderBottomColor: `${colors.error}30` }]}>
+            <LucideAlertCircle size={20} color={colors.error} />
+            <Text style={[styles.cardTitle, { color: colors.error }]}>Danger Zone</Text>
+          </View>
+          
+          <Text style={{ 
+            color: colors.onSurfaceVariant, 
+            fontSize: 13, 
+            lineHeight: 18,
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: 8,
+          }}>
+            Once you delete your account, there is no going back. All your data including trips, vehicles, and payment history will be permanently removed.
+          </Text>
+          
+          <View style={{ padding: 16, paddingTop: 8 }}>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.deleteButton, 
+                { 
+                  backgroundColor: colors.error,
+                  borderColor: colors.error,
+                  opacity: pressed ? 0.8 : 1 
+                }
+              ]}
+              onPress={handleDeleteAccount}
+            >
+              <LucideTrash2 size={20} color={colors.onError || '#FFFFFF'} />
+              <Text style={[styles.deleteButtonText, { color: colors.onError || '#FFFFFF' }]}>Delete Account Permanently</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
       </ScrollView>
 
       {/* Edit Modal */}
@@ -700,9 +965,9 @@ export default function ProfileScreen() {
         animationType="slide"
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit {getFieldLabel(editField)}</Text>
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Edit {getFieldLabel(editField)}</Text>
             
             {editField === 'phone' || editField === 'emergency_contact_phone' ? (
               <PhoneInput
@@ -733,24 +998,30 @@ export default function ProfileScreen() {
             )}
             
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton, 
+                  { backgroundColor: colors.surfaceVariant, opacity: pressed ? 0.8 : 1 }
+                ]}
                 onPress={() => setEditModalVisible(false)}
               >
-                <Text style={styles.modalButtonCancelText}>Cancel</Text>
-              </TouchableOpacity>
+                <Text style={[styles.modalButtonCancelText, { color: colors.onSurfaceVariant }]}>Cancel</Text>
+              </Pressable>
               
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSave]}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton, 
+                  { backgroundColor: colors.primary, marginLeft: 12, opacity: pressed ? 0.8 : 1 }
+                ]}
                 onPress={saveEditedField}
                 disabled={loading}
               >
                 {loading ? (
-                  <LoadingSpinner visible size="small" color={COLORS.white} />
+                  <LoadingSpinner visible size="small" color={colors.onPrimary} />
                 ) : (
-                  <Text style={styles.modalButtonSaveText}>Save</Text>
+                  <Text style={[styles.modalButtonSaveText, { color: colors.onPrimary }]}>Save</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -763,9 +1034,9 @@ export default function ProfileScreen() {
         animationType="slide"
         onRequestClose={() => setPasswordModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Change Password</Text>
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Change Password</Text>
             
             <CustomInput
               label="Current Password"
@@ -793,8 +1064,11 @@ export default function ProfileScreen() {
             />
             
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton, 
+                  { backgroundColor: colors.surfaceVariant, opacity: pressed ? 0.8 : 1 }
+                ]}
                 onPress={() => {
                   setPasswordModalVisible(false);
                   setCurrentPassword('');
@@ -803,20 +1077,23 @@ export default function ProfileScreen() {
                   setPasswordError('');
                 }}
               >
-                <Text style={styles.modalButtonCancelText}>Cancel</Text>
-              </TouchableOpacity>
+                <Text style={[styles.modalButtonCancelText, { color: colors.onSurfaceVariant }]}>Cancel</Text>
+              </Pressable>
               
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSave]}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton, 
+                  { backgroundColor: colors.primary, marginLeft: 12, opacity: pressed ? 0.8 : 1 }
+                ]}
                 onPress={handleChangePassword}
                 disabled={loading}
               >
                 {loading ? (
-                  <LoadingSpinner visible size="small" color={COLORS.white} />
+                  <LoadingSpinner visible size="small" color={colors.onPrimary} />
                 ) : (
-                  <Text style={styles.modalButtonSaveText}>Change</Text>
+                  <Text style={[styles.modalButtonSaveText, { color: colors.onPrimary }]}>Change</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -836,113 +1113,220 @@ export default function ProfileScreen() {
         message="Updating..."
         overlay
       />
+      
+      {/* M3 Dialogs */}
+      <M3ConfirmDialog
+        visible={logoutDialog}
+        title="Logout"
+        message="Are you sure you want to logout?"
+        confirmText="Logout"
+        onConfirm={executeLogout}
+        onDismiss={() => setLogoutDialog(false)}
+        isDestructive={true}
+      />
+      
+      {/* Delete Account Dialog */}
+      <M3Dialog
+        visible={deleteDialog}
+        onDismiss={closeDeleteDialog}
+        title="Delete Account Permanently?"
+        icon={<LucideTrash2 />}
+        iconColor={colors.error}
+        iconBackgroundColor={colors.errorContainer || `${colors.error}15`}
+        showCloseButton={!deleteLoading}
+        dismissible={!deleteLoading}
+        actions={[
+          {
+            label: 'Cancel',
+            onPress: closeDeleteDialog,
+            variant: 'secondary',
+            disabled: deleteLoading,
+          },
+          {
+            label: deleteLoading ? 'Deleting...' : 'Delete Account',
+            onPress: executeDeleteAccount,
+            variant: 'danger',
+            color: colors.error,
+            disabled: !isDeleteEnabled || deleteLoading,
+            loading: deleteLoading,
+          },
+        ]}
+      >
+        <View style={{ marginBottom: 16 }}>
+          <Text style={{ 
+            color: colors.onSurfaceVariant, 
+            fontSize: 14, 
+            lineHeight: 20,
+            marginBottom: 20,
+          }}>
+            This will permanently delete your account and all associated data including trips, vehicles, fare settings, and payment history.{'\n\n'}
+            <Text style={{ fontWeight: '700', color: colors.error }}>This action cannot be undone.</Text>
+          </Text>
+          
+          {/* DELETE confirmation input */}
+          <Text style={{ 
+            color: colors.onSurface, 
+            fontSize: 14, 
+            fontWeight: '600',
+            marginBottom: 8,
+          }}>
+            Type DELETE to confirm:
+          </Text>
+          <CustomInput
+            value={deleteConfirmText}
+            onChangeText={setDeleteConfirmText}
+            placeholder="Type DELETE here"
+            editable={!deleteLoading}
+            autoCapitalize="characters"
+            style={{ marginBottom: 16 }}
+          />
+          
+          {/* Password verification input */}
+          <Text style={{ 
+            color: colors.onSurface, 
+            fontSize: 14, 
+            fontWeight: '600',
+            marginBottom: 8,
+          }}>
+            Enter your password to verify:
+          </Text>
+          <CustomInput
+            value={deletePassword}
+            onChangeText={setDeletePassword}
+            placeholder="Your password"
+            secureTextEntry
+            editable={!deleteLoading}
+          />
+          
+          {/* Error message */}
+          {deleteError ? (
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              marginTop: 12,
+              padding: 12,
+              backgroundColor: colors.errorContainer || `${colors.error}15`,
+              borderRadius: 8,
+            }}>
+              <LucideAlertCircle size={18} color={colors.error} />
+              <Text style={{ 
+                color: colors.error, 
+                fontSize: 13, 
+                marginLeft: 8,
+                flex: 1,
+              }}>
+                {deleteError}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </M3Dialog>
     </View>
     </SwipeableScreen>
   );
 }
 
 // Info Item Component
-const InfoItem = ({ icon, label, value, onEdit, verified, editable = true, isLast }) => (
-  <View style={[styles.infoItem, isLast && styles.infoItemLast]}>
+const InfoItem = ({ icon, label, value, onEdit, verified, editable = true, isLast, colors }) => (
+  <View style={[styles.infoItem, isLast && styles.infoItemLast, { borderBottomColor: colors?.outlineVariant }]}>
     <View style={styles.infoLeft}>
       {icon}
       <View style={styles.infoContent}>
-        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={[styles.infoLabel, { color: colors?.onSurfaceVariant }]}>{label}</Text>
         <View style={styles.infoValueRow}>
-          <Text style={[styles.infoValue, !value && styles.infoValueEmpty]}>
+          <Text style={[styles.infoValue, { color: colors?.onSurface }, !value && { color: colors?.outline, fontStyle: 'italic' }]}>
             {value || 'Not set'}
           </Text>
           {verified && (
-            <View style={styles.verifiedBadge}>
-              <LucideCheckCircle size={14} color={COLORS.success} />
-              <Text style={styles.verifiedText}>Verified</Text>
+            <View style={[styles.verifiedBadge, { backgroundColor: colors?.secondaryContainer }]}>
+              <LucideCheckCircle size={14} color={colors?.secondary} />
+              <Text style={[styles.verifiedText, { color: colors?.secondary }]}>Verified</Text>
             </View>
           )}
         </View>
       </View>
     </View>
     {editable && onEdit && (
-      <TouchableOpacity onPress={onEdit} style={styles.editButton}>
-        <LucideEdit2 size={16} color={COLORS.primary} />
-      </TouchableOpacity>
+      <Pressable 
+        onPress={onEdit} 
+        style={({ pressed }) => [styles.editButton, pressed && { opacity: 0.6 }]}
+      >
+        <LucideEdit2 size={16} color={colors?.primary} />
+      </Pressable>
     )}
   </View>
 );
 
 // Stat Item Component
-const StatItem = ({ icon, label, value, isLast }) => (
-  <View style={[styles.statItem, isLast && styles.statItemLast]}>
+const StatItem = ({ icon, label, value, isLast, colors }) => (
+  <View style={[styles.statItem, isLast && styles.statItemLast, { borderBottomColor: colors?.outlineVariant }]}>
     <View style={styles.statLeft}>
       {icon}
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statLabel, { color: colors?.onSurface }]}>{label}</Text>
     </View>
-    <Text style={styles.statValue}>{value}</Text>
+    <Text style={[styles.statValue, { color: colors?.primary }]}>{value}</Text>
   </View>
 );
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background.light,
   },
   scrollContent: {
-    padding: SPACING.lg,
-    paddingBottom: SPACING.xxxl,
+    padding: 16,
+    paddingBottom: 48,
   },
   header: {
     alignItems: 'center',
-    marginBottom: SPACING.xl,
-    paddingTop: SPACING.lg,
+    marginBottom: 24,
+    paddingTop: 16,
   },
   userName: {
-    fontSize: TYPOGRAPHY.fontSize.xxl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
-    marginTop: SPACING.md,
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: 12,
   },
   userEmail: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
-    marginBottom: SPACING.md,
+    fontSize: 16,
+    marginBottom: 12,
   },
   memberSince: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: SPACING.md,
+    marginTop: 12,
   },
   memberSinceText: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.gray[500],
-    marginLeft: SPACING.xs,
+    fontSize: 14,
+    marginLeft: 6,
   },
   card: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    ...SHADOWS.sm,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
-    paddingBottom: SPACING.md,
+    marginBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[100],
   },
   cardTitle: {
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
-    color: COLORS.text.primary,
-    marginLeft: SPACING.sm,
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   infoItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: SPACING.md,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[100],
   },
   infoItemLast: {
     borderBottomWidth: 0,
@@ -953,12 +1337,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoContent: {
-    marginLeft: SPACING.md,
+    marginLeft: 12,
     flex: 1,
   },
   infoLabel: {
-    fontSize: TYPOGRAPHY.fontSize.xs,
-    color: COLORS.text.secondary,
+    fontSize: 12,
     marginBottom: 2,
   },
   infoValueRow: {
@@ -966,38 +1349,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   infoValue: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-  },
-  infoValueEmpty: {
-    color: COLORS.gray[400],
-    fontStyle: 'italic',
+    fontSize: 16,
+    fontWeight: '500',
   },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: SPACING.sm,
-    backgroundColor: COLORS.success + '20',
-    paddingHorizontal: SPACING.sm,
+    marginLeft: 8,
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: BORDER_RADIUS.full,
+    borderRadius: 999,
   },
   verifiedText: {
-    fontSize: TYPOGRAPHY.fontSize.xs,
-    color: COLORS.success,
+    fontSize: 12,
     marginLeft: 2,
   },
   editButton: {
-    padding: SPACING.sm,
+    padding: 8,
   },
   settingItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: SPACING.md,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[100],
+    borderRadius: 12,
   },
   settingItemLast: {
     borderBottomWidth: 0,
@@ -1007,17 +1383,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   settingLabel: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
-    marginLeft: SPACING.md,
+    fontSize: 16,
+    marginLeft: 12,
+  },
+  themeValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  themeLabelText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginRight: 4,
   },
   statItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: SPACING.md,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[100],
   },
   statItemLast: {
     borderBottomWidth: 0,
@@ -1027,95 +1410,83 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statLabel: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
-    marginLeft: SPACING.md,
+    fontSize: 16,
+    marginLeft: 12,
   },
   statValue: {
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.primary,
+    fontSize: 18,
+    fontWeight: '700',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
-    marginTop: SPACING.lg,
-    ...SHADOWS.md,
+    paddingVertical: 16,
+    borderRadius: 16,
+    marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   logoutButtonText: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    marginLeft: SPACING.sm,
+    fontSize: 18,
+    fontWeight: '700',
+    marginLeft: 8,
   },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.white,
-    paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
-    marginTop: SPACING.md,
+    paddingVertical: 16,
+    borderRadius: 16,
+    marginTop: 0,
     borderWidth: 1,
-    borderColor: COLORS.error,
   },
   deleteButtonText: {
-    color: COLORS.error,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-    marginLeft: SPACING.sm,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  dangerZoneCard: {
+    borderWidth: 1,
+    marginBottom: 32,
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    padding: SPACING.xl,
+    padding: 24,
   },
   modalContent: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.xl,
+    borderRadius: 24,
+    padding: 24,
   },
   modalTitle: {
-    fontSize: TYPOGRAPHY.fontSize.xl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
-    marginBottom: SPACING.xl,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 24,
     textAlign: 'center',
   },
   modalButtons: {
     flexDirection: 'row',
-    marginTop: SPACING.lg,
+    marginTop: 16,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 12,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
   },
-  modalButtonCancel: {
-    backgroundColor: COLORS.gray[200],
-    marginRight: SPACING.sm,
-  },
   modalButtonCancelText: {
-    color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-  },
-  modalButtonSave: {
-    backgroundColor: COLORS.primary,
-    marginLeft: SPACING.sm,
+    fontSize: 16,
+    fontWeight: '500',
   },
   modalButtonSaveText: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

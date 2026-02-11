@@ -1,13 +1,36 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { LucideWifiOff } from 'lucide-react-native';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+// Offline Banner Component - Material Design 3
+import React, { useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
+import { LucideWifiOff, LucideRefreshCw } from 'lucide-react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 /**
  * Banner shown when the app is offline or data is stale
  */
 export default function OfflineBanner({ isOffline, isStale, message }) {
-    if (!isOffline && !isStale) return null;
+    const { colors, spacing, typography } = useTheme();
+    const slideAnim = useRef(new Animated.Value(-50)).current;
+    const opacityAnim = useRef(new Animated.Value(0)).current;
+
+    const shouldShow = isOffline || isStale;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.spring(slideAnim, {
+                toValue: shouldShow ? 0 : -50,
+                friction: 8,
+                tension: 100,
+                useNativeDriver: true,
+            }),
+            Animated.timing(opacityAnim, {
+                toValue: shouldShow ? 1 : 0,
+                duration: 200,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, [shouldShow]);
+
+    if (!shouldShow) return null;
 
     const displayMessage = message || (
         isOffline
@@ -15,13 +38,47 @@ export default function OfflineBanner({ isOffline, isStale, message }) {
             : 'Data may be outdated. Pull to refresh.'
     );
 
+    const backgroundColor = isOffline 
+        ? colors.errorContainer 
+        : colors.tertiaryContainer;
+    const textColor = isOffline 
+        ? colors.onErrorContainer 
+        : colors.onTertiaryContainer;
+    const iconColor = isOffline 
+        ? colors.error 
+        : colors.tertiary;
+
     return (
-        <View style={[styles.banner, isOffline ? styles.offlineBanner : styles.staleBanner]}>
-            <LucideWifiOff size={14} color={isOffline ? COLORS.white : COLORS.warning} />
-            <Text style={[styles.text, isOffline ? styles.offlineText : styles.staleText]}>
+        <Animated.View 
+            style={[
+                styles.banner, 
+                { 
+                    backgroundColor,
+                    paddingVertical: spacing.sm,
+                    paddingHorizontal: spacing.md,
+                    transform: [{ translateY: slideAnim }],
+                    opacity: opacityAnim,
+                }
+            ]}
+        >
+            <View style={[styles.iconContainer, { backgroundColor: iconColor + '20' }]}>
+                {isOffline ? (
+                    <LucideWifiOff size={14} color={iconColor} />
+                ) : (
+                    <LucideRefreshCw size={14} color={iconColor} />
+                )}
+            </View>
+            <Text style={[
+                styles.text, 
+                { 
+                    color: textColor,
+                    marginLeft: spacing.sm,
+                    ...typography.labelMedium,
+                }
+            ]}>
                 {displayMessage}
             </Text>
-        </View>
+        </Animated.View>
     );
 }
 
@@ -30,24 +87,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: SPACING.sm,
-        paddingHorizontal: SPACING.md,
     },
-    offlineBanner: {
-        backgroundColor: COLORS.error,
-    },
-    staleBanner: {
-        backgroundColor: COLORS.warning + '20',
+    iconContainer: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     text: {
-        fontSize: TYPOGRAPHY.fontSize.xs,
-        marginLeft: SPACING.xs,
         fontWeight: '500',
-    },
-    offlineText: {
-        color: COLORS.white,
-    },
-    staleText: {
-        color: COLORS.warning,
     },
 });

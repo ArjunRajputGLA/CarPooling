@@ -1,5 +1,5 @@
-// Phone Input Component with Country Code Selector
-import React, { useState } from 'react';
+// Phone Input Component with Country Code Selector - Material Design 3
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   Modal,
   FlatList,
   StyleSheet,
+  Animated,
+  Pressable,
 } from 'react-native';
-import { LucideChevronDown, LucideCheck, LucideX } from 'lucide-react-native';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COUNTRY_CODES } from '../../constants/theme';
+import { LucideChevronDown, LucideCheck, LucideX, LucidePhone } from 'lucide-react-native';
+import { useTheme } from '../../context/ThemeContext';
+import { COUNTRY_CODES } from '../../constants/theme';
 
 const PhoneInput = ({
   label,
@@ -24,15 +27,57 @@ const PhoneInput = ({
   placeholder = 'Phone Number',
   style,
 }) => {
+  const { colors, spacing, borderRadius, typography } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const labelAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const modalSlideAnim = useRef(new Animated.Value(300)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
 
   const selectedCountry = COUNTRY_CODES.find(c => c.code === countryCode) || COUNTRY_CODES[0];
 
+  useEffect(() => {
+    Animated.timing(labelAnim, {
+      toValue: isFocused || value ? 1 : 0,
+      duration: 150,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused, value]);
+
+  const openModal = () => {
+    setShowCountryPicker(true);
+    Animated.parallel([
+      Animated.spring(modalSlideAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 65,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeModal = () => {
+    Animated.parallel([
+      Animated.timing(modalSlideAnim, {
+        toValue: 300,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setShowCountryPicker(false));
+  };
+
   const handlePhoneChange = (text) => {
-    // Remove non-numeric characters
     const numericValue = text.replace(/[^0-9]/g, '');
-    // Limit to 10 digits
     const limitedValue = numericValue.slice(0, 10);
     onChangeText(limitedValue);
   };
@@ -44,79 +89,164 @@ const PhoneInput = ({
   };
 
   const getBorderColor = () => {
-    if (error) return COLORS.error;
-    if (isFocused) return COLORS.primary;
-    if (isValid && value) return COLORS.success;
-    return COLORS.input.border;
+    if (error) return colors.error;
+    if (isFocused) return colors.primary;
+    if (isValid && value) return colors.success;
+    return colors.outline;
   };
 
+  const getLabelColor = () => {
+    if (error) return colors.error;
+    if (isFocused) return colors.primary;
+    return colors.onSurfaceVariant;
+  };
+
+  const labelTop = labelAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [16, -8],
+  });
+
+  const labelFontSize = labelAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [16, 12],
+  });
+
   const renderCountryItem = ({ item }) => (
-    <TouchableOpacity
-      style={[
+    <Pressable
+      style={({ pressed }) => [
         styles.countryItem,
-        item.code === countryCode && styles.countryItemSelected,
+        {
+          backgroundColor: item.code === countryCode 
+            ? colors.primaryContainer 
+            : pressed 
+              ? colors.surfaceContainerHighest 
+              : 'transparent',
+          padding: spacing.lg,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.outlineVariant,
+        },
       ]}
       onPress={() => {
         onChangeCountryCode && onChangeCountryCode(item.code);
-        setShowCountryPicker(false);
+        closeModal();
       }}
     >
-      <Text style={styles.countryFlag}>{item.flag}</Text>
-      <Text style={styles.countryName}>{item.country}</Text>
-      <Text style={styles.countryCode}>{item.code}</Text>
+      <Text style={[styles.countryFlag, { marginRight: spacing.md }]}>{item.flag}</Text>
+      <Text style={[
+        styles.countryName, 
+        { 
+          color: colors.onSurface,
+          ...typography.bodyLarge,
+          flex: 1,
+        }
+      ]}>
+        {item.country}
+      </Text>
+      <Text style={[
+        styles.countryCode, 
+        { 
+          color: colors.onSurfaceVariant,
+          ...typography.bodyMedium,
+          marginRight: spacing.md,
+        }
+      ]}>
+        {item.code}
+      </Text>
       {item.code === countryCode && (
-        <LucideCheck size={20} color={COLORS.primary} />
+        <LucideCheck size={20} color={colors.primary} />
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 
   return (
-    <View style={[styles.container, style]}>
-      {label && (
-        <View style={styles.labelContainer}>
-          <Text style={styles.label}>{label}</Text>
-          {required && <Text style={styles.required}>*</Text>}
-        </View>
-      )}
-
+    <View style={[styles.container, { marginBottom: spacing.md }, style]}>
       <View style={[
         styles.inputContainer,
-        { borderColor: getBorderColor() },
-        isFocused && styles.inputFocused,
-        error && styles.inputError,
+        {
+          borderWidth: isFocused ? 2 : 1,
+          borderColor: getBorderColor(),
+          borderRadius: borderRadius.textField,
+          backgroundColor: 'transparent',
+        },
       ]}>
+        {/* Floating Label */}
+        {label && (
+          <Animated.Text
+            style={[
+              styles.floatingLabel,
+              {
+                color: getLabelColor(),
+                top: labelTop,
+                fontSize: labelFontSize,
+                backgroundColor: isFocused || value ? colors.surface : 'transparent',
+                paddingHorizontal: isFocused || value ? 4 : 0,
+                left: 12,
+              },
+            ]}
+            pointerEvents="none"
+          >
+            {label}{required && <Text style={{ color: colors.error }}> *</Text>}
+          </Animated.Text>
+        )}
+        
         {/* Country Code Selector */}
         <TouchableOpacity
-          style={styles.countrySelector}
-          onPress={() => setShowCountryPicker(true)}
+          style={[
+            styles.countrySelector, 
+            { 
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.md,
+            }
+          ]}
+          onPress={openModal}
         >
           <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
-          <Text style={styles.selectedCode}>{selectedCountry.code}</Text>
-          <LucideChevronDown size={16} color={COLORS.gray[500]} />
+          <Text style={[
+            styles.selectedCode, 
+            { 
+              color: colors.onSurface,
+              ...typography.bodyLarge,
+              marginHorizontal: spacing.xs,
+            }
+          ]}>
+            {selectedCountry.code}
+          </Text>
+          <LucideChevronDown size={16} color={colors.onSurfaceVariant} />
         </TouchableOpacity>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
 
         {/* Phone Input */}
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              color: colors.onSurface,
+              paddingHorizontal: spacing.md,
+              ...typography.bodyLarge,
+            }
+          ]}
           value={formatPhoneDisplay(value)}
           onChangeText={handlePhoneChange}
-          placeholder={placeholder}
-          placeholderTextColor={COLORS.input.placeholder}
+          placeholder={isFocused && !value ? placeholder : ''}
+          placeholderTextColor={colors.onSurfaceVariant}
           keyboardType="phone-pad"
-          maxLength={11} // 10 digits + 1 space
+          maxLength={11}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
         />
 
         {/* Validation Icon */}
         {value && (
-          <View style={styles.validationIcon}>
+          <View style={[styles.validationIcon, { paddingRight: spacing.md }]}>
             {isValid ? (
-              <LucideCheck size={20} color={COLORS.success} />
+              <View style={[styles.iconContainer, { backgroundColor: colors.primaryContainer }]}>
+                <LucideCheck size={16} color={colors.primary} />
+              </View>
             ) : (
-              <LucideX size={20} color={COLORS.error} />
+              <View style={[styles.iconContainer, { backgroundColor: colors.errorContainer }]}>
+                <LucideX size={16} color={colors.error} />
+              </View>
             )}
           </View>
         )}
@@ -124,26 +254,62 @@ const PhoneInput = ({
 
       {/* Error Message */}
       {error && (
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={[
+          styles.errorText, 
+          { 
+            color: colors.error,
+            marginTop: spacing.xs,
+            marginLeft: spacing.md,
+            ...typography.bodySmall,
+          }
+        ]}>
+          {error}
+        </Text>
       )}
 
       {/* Country Picker Modal */}
       <Modal
         visible={showCountryPicker}
         transparent
-        animationType="slide"
-        onRequestClose={() => setShowCountryPicker(false)}
+        animationType="none"
+        onRequestClose={closeModal}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowCountryPicker(false)}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Country</Text>
-              <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
-                <LucideX size={24} color={COLORS.gray[700]} />
+        <View style={styles.modalContainer}>
+          <Animated.View 
+            style={[
+              styles.modalBackdrop,
+              { opacity: backdropAnim }
+            ]}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeModal} />
+          </Animated.View>
+          
+          <Animated.View style={[
+            styles.modalContent,
+            {
+              backgroundColor: colors.surfaceContainerLow,
+              borderTopLeftRadius: borderRadius.extraLarge,
+              borderTopRightRadius: borderRadius.extraLarge,
+              transform: [{ translateY: modalSlideAnim }],
+            }
+          ]}>
+            <View style={styles.handleContainer}>
+              <View style={[styles.handle, { backgroundColor: colors.outlineVariant }]} />
+            </View>
+            
+            <View style={[
+              styles.modalHeader, 
+              { 
+                padding: spacing.lg,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.outlineVariant,
+              }
+            ]}>
+              <Text style={[styles.modalTitle, { color: colors.onSurface, ...typography.titleLarge }]}>
+                Select Country
+              </Text>
+              <TouchableOpacity onPress={closeModal}>
+                <LucideX size={24} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -151,125 +317,87 @@ const PhoneInput = ({
               renderItem={renderCountryItem}
               keyExtractor={(item) => item.code}
               showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 400 }}
             />
-          </View>
-        </TouchableOpacity>
+          </Animated.View>
+        </View>
       </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: SPACING.md,
-  },
-  labelContainer: {
-    flexDirection: 'row',
-    marginBottom: SPACING.xs,
-  },
-  label: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-    color: COLORS.text.primary,
-  },
-  required: {
-    color: COLORS.error,
-    marginLeft: 2,
-  },
+  container: {},
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.input.background,
-    minHeight: 48,
+    minHeight: 56,
+    position: 'relative',
   },
-  inputFocused: {
-    borderWidth: 2,
-  },
-  inputError: {
-    borderColor: COLORS.error,
+  floatingLabel: {
+    position: 'absolute',
+    zIndex: 1,
   },
   countrySelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
   },
   countryFlag: {
     fontSize: 20,
-    marginRight: SPACING.xs,
   },
   selectedCode: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
-    marginRight: SPACING.xs,
+    fontWeight: '500',
   },
   divider: {
     width: 1,
     height: 24,
-    backgroundColor: COLORS.gray[300],
   },
   input: {
     flex: 1,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
+    paddingVertical: 16,
   },
-  validationIcon: {
-    paddingRight: SPACING.md,
+  validationIcon: {},
+  iconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  errorText: {
-    color: COLORS.error,
-    fontSize: TYPOGRAPHY.fontSize.xs,
-    marginTop: SPACING.xs,
-  },
-  modalOverlay: {
+  errorText: {},
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
-    maxHeight: '50%',
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {},
+  handleContainer: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  handle: {
+    width: 32,
+    height: 4,
+    borderRadius: 2,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[200],
   },
   modalTitle: {
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
+    fontWeight: '600',
   },
   countryItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[100],
   },
-  countryItemSelected: {
-    backgroundColor: COLORS.primaryLight,
-  },
-  countryName: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
-    marginLeft: SPACING.md,
-  },
-  countryCode: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.gray[600],
-    marginRight: SPACING.md,
-  },
+  countryName: {},
+  countryCode: {},
 });
 
 export default PhoneInput;

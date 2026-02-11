@@ -1,21 +1,21 @@
-// Complete Login Screen with remember me and role-based navigation
-import React, { useState, useEffect } from 'react';
+// Complete Login Screen with Material 3 styling
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Switch,
-  Image,
   Alert,
+  Animated,
 } from 'react-native';
 import { LucideCarFront, LucideMail, LucideLock } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { validateEmail } from '../../utils/validation';
 import {
   saveRememberedEmail,
@@ -23,10 +23,16 @@ import {
   clearRememberedEmail,
   isRememberMeEnabled,
 } from '../../utils/storage';
-import { CustomInput, LoadingSpinner } from '../../components/common';
+import { M3TextField, M3Button, ButtonVariant, M3LoadingDialog } from '../../components/common';
 
 export default function LoginScreen({ navigation }) {
   const { signIn } = useAuth();
+  const { colors, typography, borderRadius, elevation, spacing, isDark } = useTheme();
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const formAnim = useRef(new Animated.Value(0)).current;
 
   // Form fields
   const [email, setEmail] = useState('');
@@ -40,6 +46,27 @@ export default function LoginScreen({ navigation }) {
   // Load remembered email on mount
   useEffect(() => {
     loadRememberedEmail();
+    
+    // Start animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    Animated.timing(formAnim, {
+      toValue: 1,
+      duration: 500,
+      delay: 200,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   const loadRememberedEmail = async () => {
@@ -161,7 +188,7 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
@@ -170,21 +197,44 @@ export default function LoginScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         {/* Logo */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoCircle}>
-            <LucideCarFront size={56} color={COLORS.primary} />
+        <Animated.View style={[
+          styles.logoContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}>
+          <View style={[styles.logoCircle, { backgroundColor: colors.primaryContainer }]}>
+            <LucideCarFront size={56} color={colors.onPrimaryContainer} />
           </View>
-          <Text style={styles.appName}>CarPooling</Text>
-        </View>
+          <Text style={[styles.appName, { color: colors.primary, ...typography.headlineMedium }]}>CarPooling</Text>
+        </Animated.View>
 
         {/* Header */}
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to continue your journey</Text>
+        <Animated.View style={{
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }}>
+          <Text style={[styles.title, { color: colors.onSurface, ...typography.displaySmall }]}>Welcome Back</Text>
+          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant, ...typography.bodyLarge }]}>Sign in to continue your journey</Text>
+        </Animated.View>
 
         {/* Form Card */}
-        <View style={styles.formCard}>
+        <Animated.View style={[
+          styles.formCard,
+          {
+            backgroundColor: colors.surfaceContainerLow,
+            borderRadius: borderRadius.extraLarge,
+            opacity: formAnim,
+            transform: [{ translateY: formAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [30, 0],
+            }) }],
+          },
+          elevation.level1,
+        ]}>
           {/* Email Input */}
-          <CustomInput
+          <M3TextField
             label="Email"
             value={email}
             onChangeText={(text) => {
@@ -192,14 +242,17 @@ export default function LoginScreen({ navigation }) {
               if (errors.email) setErrors({ ...errors, email: null });
             }}
             placeholder="Enter your email"
-            error={errors.email}
+            error={!!errors.email}
+            errorMessage={errors.email}
             keyboardType="email-address"
             autoCapitalize="none"
-            leftIcon={<LucideMail size={20} color={COLORS.gray[500]} />}
+            leadingIcon={<LucideMail />}
+            showValidationIcon
+            isValid={email && validateEmail(email)}
           />
 
           {/* Password Input */}
-          <CustomInput
+          <M3TextField
             label="Password"
             value={password}
             onChangeText={(text) => {
@@ -207,9 +260,10 @@ export default function LoginScreen({ navigation }) {
               if (errors.password) setErrors({ ...errors, password: null });
             }}
             placeholder="Enter your password"
-            error={errors.password}
+            error={!!errors.password}
+            errorMessage={errors.password}
             secureTextEntry
-            leftIcon={<LucideLock size={20} color={COLORS.gray[500]} />}
+            leadingIcon={<LucideLock />}
           />
 
           {/* Remember Me & Forgot Password Row */}
@@ -218,54 +272,46 @@ export default function LoginScreen({ navigation }) {
               <Switch
                 value={rememberMe}
                 onValueChange={setRememberMe}
-                trackColor={{ false: COLORS.gray[300], true: COLORS.primaryLight }}
-                thumbColor={rememberMe ? COLORS.primary : COLORS.gray[100]}
+                trackColor={{ false: colors.surfaceVariant, true: colors.primaryContainer }}
+                thumbColor={rememberMe ? colors.primary : colors.outline}
               />
-              <Text style={styles.rememberMeText}>Remember me</Text>
+              <Text style={[styles.rememberMeText, { color: colors.onSurfaceVariant, ...typography.bodyMedium }]}>Remember me</Text>
             </View>
 
-            <TouchableOpacity
+            <Pressable
               onPress={() => navigation.navigate('ForgotPassword')}
+              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
             >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
+              <Text style={[styles.forgotPasswordText, { color: colors.primary, ...typography.labelLarge }]}>Forgot Password?</Text>
+            </Pressable>
           </View>
 
           {/* Login Button */}
-          <TouchableOpacity
-            style={[
-              styles.loginButton,
-              (!email || !password) && styles.loginButtonDisabled,
-            ]}
+          <M3Button
+            title="Sign In"
             onPress={handleLogin}
-            disabled={loading || !email || !password}
-          >
-            {loading ? (
-              <LoadingSpinner visible size="small" color={COLORS.white} />
-            ) : (
-              <Text style={styles.loginButtonText}>Login</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+            variant={ButtonVariant.FILLED}
+            fullWidth
+            disabled={!email || !password}
+            loading={loading}
+            size="large"
+          />
+        </Animated.View>
 
         {/* Register Link */}
-        <TouchableOpacity
+        <Pressable
           style={styles.registerLink}
           onPress={() => navigation.navigate('Register')}
         >
-          <Text style={styles.registerLinkText}>
+          <Text style={[styles.registerLinkText, { color: colors.onSurfaceVariant, ...typography.bodyLarge }]}>
             Don't have an account?{' '}
-            <Text style={styles.registerLinkBold}>Sign Up</Text>
+            <Text style={[styles.registerLinkBold, { color: colors.primary }]}>Sign Up</Text>
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       </ScrollView>
 
-      {/* Loading Overlay */}
-      <LoadingSpinner
-        visible={loading}
-        message="Signing in..."
-        overlay
-      />
+      {/* Loading Dialog */}
+      <M3LoadingDialog visible={loading} message="Signing in..." />
     </KeyboardAvoidingView>
   );
 }
@@ -273,98 +319,62 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background.light,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: SPACING.xl,
+    padding: 24,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: SPACING.xxxl,
+    marginBottom: 40,
   },
   logoCircle: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: COLORS.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    ...SHADOWS.lg,
   },
   appName: {
-    fontSize: TYPOGRAPHY.fontSize.xxl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.primary,
-    marginTop: SPACING.md,
+    marginTop: 12,
+    fontWeight: '600',
   },
   title: {
-    fontSize: TYPOGRAPHY.fontSize.xxxl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
     textAlign: 'center',
-    marginBottom: SPACING.xs,
+    marginBottom: 8,
+    fontWeight: '600',
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
     textAlign: 'center',
-    marginBottom: SPACING.xxl,
+    marginBottom: 32,
   },
   formCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.xl,
-    ...SHADOWS.md,
+    padding: 24,
   },
   optionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.xl,
+    marginBottom: 24,
+    marginTop: 8,
   },
   rememberMeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   rememberMeText: {
-    marginLeft: SPACING.sm,
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.text.secondary,
+    marginLeft: 8,
   },
   forgotPasswordText: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-  },
-  loginButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 52,
-    ...SHADOWS.md,
-  },
-  loginButtonDisabled: {
-    backgroundColor: COLORS.gray[400],
-  },
-  loginButtonText: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    fontWeight: '500',
   },
   registerLink: {
-    marginTop: SPACING.xxl,
+    marginTop: 32,
     alignItems: 'center',
   },
-  registerLinkText: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
-  },
+  registerLinkText: {},
   registerLinkBold: {
-    color: COLORS.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    fontWeight: '600',
   },
 });

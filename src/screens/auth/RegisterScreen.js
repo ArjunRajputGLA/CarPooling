@@ -1,19 +1,19 @@
-// Complete Registration Screen with all required and optional fields
-import React, { useState, useEffect } from 'react';
+// Complete Registration Screen with Material 3 styling
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   Alert,
-  Image,
+  Animated,
 } from 'react-native';
-import { LucideCarFront } from 'lucide-react-native';
+import { LucideCarFront, LucideUser, LucideMail, LucideLock, LucidePhone, LucideMapPin, LucideAlertCircle } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import {
   validateEmail,
   validatePhone,
@@ -23,18 +23,27 @@ import {
 } from '../../utils/validation';
 import { uploadProfilePicture } from '../../utils/imageHelpers';
 import {
-  CustomInput,
   PhoneInput,
   PasswordStrengthIndicator,
   ProfilePictureUpload,
-  LoadingSpinner,
   Toast,
+  M3TextField,
+  M3Button,
+  ButtonVariant,
+  M3LoadingDialog,
+  CustomInput,
+  LoadingSpinner,
 } from '../../components/common';
 
 // Driver email constant
 const DRIVER_EMAIL = 'imstorm23203@gmail.com';
 
 export default function RegisterScreen({ navigation }) {
+  const { colors, typography, borderRadius, elevation, spacing, isDark } = useTheme();
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
   // Required fields
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -128,6 +137,22 @@ export default function RegisterScreen({ navigation }) {
 
     setErrors(newErrors);
   }, [fullName, email, phone, password, confirmPassword, emergencyContactPhone, homeAddress, touched]);
+
+  // Animation effect
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   // Check if email already exists
   const checkEmailExists = async (emailToCheck) => {
@@ -354,7 +379,7 @@ export default function RegisterScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
@@ -363,16 +388,27 @@ export default function RegisterScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         {/* Logo */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoCircle}>
-            <LucideCarFront size={48} color={COLORS.primary} />
+        <Animated.View style={[
+          styles.logoContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}>
+          <View style={[styles.logoCircle, { backgroundColor: colors.primaryContainer }]}>
+            <LucideCarFront size={48} color={colors.primary} />
           </View>
-          <Text style={styles.appName}>CarPooling</Text>
-        </View>
+          <Text style={[styles.appName, { color: colors.primary }]}>CarPooling</Text>
+        </Animated.View>
 
         {/* Header */}
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Join our carpooling community</Text>
+        <Animated.View style={{
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }}>
+          <Text style={[styles.title, { color: colors.onSurface }]}>Create Account</Text>
+          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>Join our carpooling community</Text>
+        </Animated.View>
 
         {/* Profile Picture */}
         <ProfilePictureUpload
@@ -385,7 +421,7 @@ export default function RegisterScreen({ navigation }) {
 
         {/* Required Fields Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Required Information</Text>
+          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Required Information</Text>
 
           {/* Full Name */}
           <CustomInput
@@ -459,8 +495,8 @@ export default function RegisterScreen({ navigation }) {
 
         {/* Optional Fields Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Optional Information</Text>
-          <Text style={styles.sectionSubtitle}>
+          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Optional Information</Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.onSurfaceVariant }]}>
             This information helps us keep you safe
           </Text>
 
@@ -500,31 +536,25 @@ export default function RegisterScreen({ navigation }) {
         </View>
 
         {/* Sign Up Button */}
-        <TouchableOpacity
-          style={[
-            styles.signUpButton,
-            !isFormValid() && styles.signUpButtonDisabled,
-          ]}
+        <M3Button
+          variant={ButtonVariant.FILLED}
           onPress={handleRegister}
           disabled={loading || !isFormValid()}
-        >
-          {loading ? (
-            <LoadingSpinner visible size="small" color={COLORS.white} />
-          ) : (
-            <Text style={styles.signUpButtonText}>Sign Up</Text>
-          )}
-        </TouchableOpacity>
+          loading={loading}
+          style={{ marginTop: 8 }}
+          title="Sign Up"
+        />
 
         {/* Login Link */}
-        <TouchableOpacity
+        <Pressable
           style={styles.loginLink}
           onPress={() => navigation.navigate('Login')}
         >
-          <Text style={styles.loginLinkText}>
+          <Text style={[styles.loginLinkText, { color: colors.onSurfaceVariant }]}>
             Already have an account?{' '}
-            <Text style={styles.loginLinkBold}>Login</Text>
+            <Text style={[styles.loginLinkBold, { color: colors.primary }]}>Login</Text>
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       </ScrollView>
 
       {/* Toast */}
@@ -535,11 +565,10 @@ export default function RegisterScreen({ navigation }) {
         onDismiss={() => setToast({ ...toast, visible: false })}
       />
 
-      {/* Loading Overlay */}
-      <LoadingSpinner
+      {/* Loading Dialog */}
+      <M3LoadingDialog
         visible={loading}
         message="Creating your account..."
-        overlay
       />
     </KeyboardAvoidingView>
   );
@@ -548,86 +577,80 @@ export default function RegisterScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background.light,
   },
   scrollContent: {
     flexGrow: 1,
-    padding: SPACING.xl,
-    paddingBottom: SPACING.xxxl,
+    padding: 24,
+    paddingBottom: 48,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: SPACING.xl,
+    marginBottom: 24,
   },
   logoCircle: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: COLORS.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    ...SHADOWS.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   appName: {
-    fontSize: TYPOGRAPHY.fontSize.xl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.primary,
-    marginTop: SPACING.sm,
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 8,
   },
   title: {
-    fontSize: TYPOGRAPHY.fontSize.xxl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
+    fontSize: 24,
+    fontWeight: '700',
     textAlign: 'center',
-    marginBottom: SPACING.xs,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
+    fontSize: 16,
     textAlign: 'center',
-    marginBottom: SPACING.xl,
+    marginBottom: 24,
   },
   section: {
-    marginBottom: SPACING.xl,
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.semibold,
-    color: COLORS.text.primary,
-    marginBottom: SPACING.xs,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 6,
   },
   sectionSubtitle: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.text.secondary,
-    marginBottom: SPACING.lg,
+    fontSize: 14,
+    marginBottom: 16,
   },
   signUpButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
-    ...SHADOWS.md,
-  },
-  signUpButtonDisabled: {
-    backgroundColor: COLORS.gray[400],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   signUpButtonText: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    fontSize: 18,
+    fontWeight: '700',
   },
   loginLink: {
-    marginTop: SPACING.xl,
+    marginTop: 24,
     alignItems: 'center',
   },
   loginLinkText: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
+    fontSize: 16,
   },
   loginLinkBold: {
-    color: COLORS.primary,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    fontWeight: '700',
   },
 });

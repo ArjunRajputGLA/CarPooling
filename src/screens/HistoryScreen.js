@@ -1,19 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
     View, 
     Text, 
     FlatList, 
     StyleSheet, 
     ActivityIndicator, 
-    TouchableOpacity, 
+    Pressable, 
     Modal,
     RefreshControl,
     Image,
     ScrollView,
     TextInput,
     Alert,
+    Animated,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { 
     LucideCalendar, 
@@ -25,12 +27,13 @@ import {
     LucideWallet,
     LucideClock,
     LucideSearch,
-    LucideFilter,
     LucideCheckCircle,
     LucideCircleDot,
     LucideTrash2,
+    LucideChevronLeft,
+    LucideChevronRight,
+    LucideInbox,
 } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, TYPOGRAPHY } from '../constants/theme';
 import { getMonthRange, formatDate, formatTime, formatDateTime } from '../utils/dateHelpers';
 import SwipeableScreen from '../components/common/SwipeableScreen';
 
@@ -38,6 +41,7 @@ const FARE_PER_TRIP = 31;
 
 export default function HistoryScreen() {
     const { user, profile } = useAuth();
+    const { colors, spacing, borderRadius, isDark } = useTheme();
     const [trips, setTrips] = useState([]);
     const [filteredTrips, setFilteredTrips] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -53,6 +57,17 @@ export default function HistoryScreen() {
     // Modal state
     const [selectedTrip, setSelectedTrip] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
+    
+    // Animations
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    
+    useEffect(() => {
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+        }).start();
+    }, []);
 
     useEffect(() => {
         fetchHistory();
@@ -211,25 +226,35 @@ export default function HistoryScreen() {
     };
 
     const renderItem = ({ item }) => (
-        <TouchableOpacity 
-            style={styles.card}
+        <Pressable 
+            style={({ pressed }) => [
+                styles.card,
+                { 
+                    backgroundColor: colors.surfaceContainerLow, 
+                    borderRadius: borderRadius.large,
+                    opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.99 : 1 }],
+                }
+            ]}
             onPress={() => handleTripPress(item)}
-            activeOpacity={0.7}
         >
             <View style={styles.cardHeader}>
                 <View style={styles.dateContainer}>
-                    <LucideCalendar size={16} color={COLORS.primary} />
-                    <Text style={styles.cardDate}>{formatDate(item.scan_timestamp)}</Text>
+                    <LucideCalendar size={16} color={colors.primary} />
+                    <Text style={[styles.cardDate, { color: colors.onSurface }]}>{formatDate(item.scan_timestamp)}</Text>
                 </View>
                 <View style={[
                     styles.statusBadge,
-                    item.payment_status === 'paid' ? styles.paidBadge : styles.pendingBadge
+                    { 
+                        backgroundColor: item.payment_status === 'paid' ? colors.primaryContainer : colors.tertiaryContainer,
+                        borderRadius: borderRadius.full,
+                    }
                 ]}>
                     <Text style={[
                         styles.statusText,
-                        item.payment_status === 'paid' ? styles.paidText : styles.pendingText
+                        { color: item.payment_status === 'paid' ? colors.primary : colors.tertiary }
                     ]}>
-                        {item.payment_status === 'paid' ? ' PAID' : ' PENDING'}
+                        {item.payment_status === 'paid' ? '✓ PAID' : '◐ PENDING'}
                     </Text>
                 </View>
             </View>
@@ -237,26 +262,26 @@ export default function HistoryScreen() {
                 <View style={styles.detailRow}>
                     {profile?.role === 'passenger' ? (
                         <>
-                            <LucideCar size={16} color={COLORS.gray[500]} />
-                            <Text style={styles.cardDetail}>{item.car?.car_name || 'Unknown'}</Text>
+                            <LucideCar size={16} color={colors.onSurfaceVariant} />
+                            <Text style={[styles.cardDetail, { color: colors.onSurfaceVariant }]}>{item.car?.car_name || 'Unknown'}</Text>
                         </>
                     ) : (
                         <>
-                            <LucideUser size={16} color={COLORS.gray[500]} />
-                            <Text style={styles.cardDetail}>{item.passenger?.full_name || 'Unknown'}</Text>
+                            <LucideUser size={16} color={colors.onSurfaceVariant} />
+                            <Text style={[styles.cardDetail, { color: colors.onSurfaceVariant }]}>{item.passenger?.full_name || 'Unknown'}</Text>
                         </>
                     )}
                 </View>
                 <View style={styles.fareContainer}>
-                    <Text style={styles.fareLabel}>₹</Text>
-                    <Text style={styles.fareAmount}>{item.fare_amount || FARE_PER_TRIP}</Text>
+                    <Text style={[styles.fareLabel, { color: colors.onSurfaceVariant }]}>₹</Text>
+                    <Text style={[styles.fareAmount, { color: colors.primary }]}>{item.fare_amount || FARE_PER_TRIP}</Text>
                 </View>
             </View>
             <View style={styles.timeRow}>
-                <LucideClock size={12} color={COLORS.gray[400]} />
-                <Text style={styles.cardTime}>{formatTime(item.scan_timestamp)}</Text>
+                <LucideClock size={12} color={colors.onSurfaceVariant} />
+                <Text style={[styles.cardTime, { color: colors.onSurfaceVariant }]}>{formatTime(item.scan_timestamp)}</Text>
             </View>
-        </TouchableOpacity>
+        </Pressable>
     );
 
     const changeMonth = (delta) => {
@@ -273,13 +298,14 @@ export default function HistoryScreen() {
     // Trip Detail Modal
     const TripDetailModal = () => (
         <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={closeModal}>
-            <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
+            <Pressable style={styles.modalOverlay} onPress={closeModal}>
+                <Pressable style={[styles.modalContent, { backgroundColor: colors.surfaceContainerHigh, borderTopLeftRadius: borderRadius.extraLarge, borderTopRightRadius: borderRadius.extraLarge }]} onPress={(e) => e.stopPropagation()}>
+                    <View style={[styles.modalHandle, { backgroundColor: colors.outlineVariant }]} />
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Trip Details</Text>
-                        <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-                            <LucideX size={24} color={COLORS.gray[600]} />
-                        </TouchableOpacity>
+                        <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Trip Details</Text>
+                        <Pressable onPress={closeModal} style={({ pressed }) => [styles.closeButton, { opacity: pressed ? 0.6 : 1 }]}>
+                            <LucideX size={24} color={colors.onSurfaceVariant} />
+                        </Pressable>
                     </View>
 
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
@@ -291,16 +317,16 @@ export default function HistoryScreen() {
                                         {selectedTrip.passenger?.profile_picture_url ? (
                                             <Image 
                                                 source={{ uri: selectedTrip.passenger.profile_picture_url }}
-                                                style={styles.passengerAvatar}
+                                                style={[styles.passengerAvatar, { borderColor: colors.primary }]}
                                             />
                                         ) : (
-                                            <View style={styles.avatarPlaceholder}>
-                                                <Text style={styles.avatarText}>
+                                            <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primaryContainer }]}>
+                                                <Text style={[styles.avatarText, { color: colors.primary }]}>
                                                     {selectedTrip.passenger?.full_name?.charAt(0)?.toUpperCase() || '?'}
                                                 </Text>
                                             </View>
                                         )}
-                                        <Text style={styles.passengerName}>
+                                        <Text style={[styles.passengerName, { color: colors.onSurface }]}>
                                             {selectedTrip.passenger?.full_name || 'Unknown Passenger'}
                                         </Text>
                                     </View>
@@ -308,25 +334,25 @@ export default function HistoryScreen() {
 
                                 {/* Contact Info (Driver only) */}
                                 {profile?.role === 'driver' && (
-                                    <View style={styles.infoSection}>
-                                        <View style={styles.infoRow}>
-                                            <View style={styles.infoIconContainer}>
-                                                <LucideMail size={20} color={COLORS.primary} />
+                                    <View style={[styles.infoSection, { backgroundColor: colors.surfaceContainerLow, borderRadius: borderRadius.large }]}>
+                                        <View style={[styles.infoRow, { borderBottomColor: colors.outlineVariant }]}>
+                                            <View style={[styles.infoIconContainer, { backgroundColor: colors.primaryContainer }]}>
+                                                <LucideMail size={20} color={colors.primary} />
                                             </View>
                                             <View style={styles.infoContent}>
-                                                <Text style={styles.infoLabel}>Email</Text>
-                                                <Text style={styles.infoValue}>
+                                                <Text style={[styles.infoLabel, { color: colors.onSurfaceVariant }]}>Email</Text>
+                                                <Text style={[styles.infoValue, { color: colors.onSurface }]}>
                                                     {selectedTrip.passenger?.email || 'Not provided'}
                                                 </Text>
                                             </View>
                                         </View>
                                         <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-                                            <View style={styles.infoIconContainer}>
-                                                <LucidePhone size={20} color={COLORS.primary} />
+                                            <View style={[styles.infoIconContainer, { backgroundColor: colors.primaryContainer }]}>
+                                                <LucidePhone size={20} color={colors.primary} />
                                             </View>
                                             <View style={styles.infoContent}>
-                                                <Text style={styles.infoLabel}>Phone</Text>
-                                                <Text style={styles.infoValue}>
+                                                <Text style={[styles.infoLabel, { color: colors.onSurfaceVariant }]}>Phone</Text>
+                                                <Text style={[styles.infoValue, { color: colors.onSurface }]}>
                                                     {selectedTrip.passenger?.phone || 'Not provided'}
                                                 </Text>
                                             </View>
@@ -336,31 +362,31 @@ export default function HistoryScreen() {
 
                                 {/* Trip Info Grid */}
                                 <View style={styles.tripInfoSection}>
-                                    <Text style={styles.tripInfoTitle}>Trip Information</Text>
+                                    <Text style={[styles.tripInfoTitle, { color: colors.onSurface }]}>Trip Information</Text>
                                     <View style={styles.tripInfoGrid}>
-                                        <View style={styles.tripInfoItem}>
-                                            <LucideCalendar size={18} color={COLORS.gray[500]} />
-                                            <Text style={styles.tripInfoLabel}>Date</Text>
-                                            <Text style={styles.tripInfoValue}>
+                                        <View style={[styles.tripInfoItem, { backgroundColor: colors.surfaceContainerLow, borderRadius: borderRadius.medium }]}>
+                                            <LucideCalendar size={18} color={colors.onSurfaceVariant} />
+                                            <Text style={[styles.tripInfoLabel, { color: colors.onSurfaceVariant }]}>Date</Text>
+                                            <Text style={[styles.tripInfoValue, { color: colors.onSurface }]}>
                                                 {formatDate(selectedTrip.scan_timestamp)}
                                             </Text>
                                         </View>
-                                        <View style={styles.tripInfoItem}>
-                                            <LucideClock size={18} color={COLORS.gray[500]} />
-                                            <Text style={styles.tripInfoLabel}>Time</Text>
-                                            <Text style={styles.tripInfoValue}>
+                                        <View style={[styles.tripInfoItem, { backgroundColor: colors.surfaceContainerLow, borderRadius: borderRadius.medium }]}>
+                                            <LucideClock size={18} color={colors.onSurfaceVariant} />
+                                            <Text style={[styles.tripInfoLabel, { color: colors.onSurfaceVariant }]}>Time</Text>
+                                            <Text style={[styles.tripInfoValue, { color: colors.onSurface }]}>
                                                 {formatTime(selectedTrip.scan_timestamp)}
                                             </Text>
                                         </View>
-                                        <View style={styles.tripInfoItem}>
-                                            <LucideWallet size={18} color={COLORS.gray[500]} />
-                                            <Text style={styles.tripInfoLabel}>Fare</Text>
-                                            <Text style={styles.tripInfoValue}>₹{selectedTrip.fare_amount || FARE_PER_TRIP}</Text>
+                                        <View style={[styles.tripInfoItem, { backgroundColor: colors.surfaceContainerLow, borderRadius: borderRadius.medium }]}>
+                                            <LucideWallet size={18} color={colors.onSurfaceVariant} />
+                                            <Text style={[styles.tripInfoLabel, { color: colors.onSurfaceVariant }]}>Fare</Text>
+                                            <Text style={[styles.tripInfoValue, { color: colors.onSurface }]}>₹{selectedTrip.fare_amount || FARE_PER_TRIP}</Text>
                                         </View>
-                                        <View style={styles.tripInfoItem}>
-                                            <LucideCar size={18} color={COLORS.gray[500]} />
-                                            <Text style={styles.tripInfoLabel}>Car</Text>
-                                            <Text style={styles.tripInfoValue}>
+                                        <View style={[styles.tripInfoItem, { backgroundColor: colors.surfaceContainerLow, borderRadius: borderRadius.medium }]}>
+                                            <LucideCar size={18} color={colors.onSurfaceVariant} />
+                                            <Text style={[styles.tripInfoLabel, { color: colors.onSurfaceVariant }]}>Car</Text>
+                                            <Text style={[styles.tripInfoValue, { color: colors.onSurface }]}>
                                                 {selectedTrip.car?.car_name || 'N/A'}
                                             </Text>
                                         </View>
@@ -370,22 +396,25 @@ export default function HistoryScreen() {
                                 {/* Payment Status */}
                                 <View style={[
                                     styles.paymentStatusCard,
-                                    selectedTrip.payment_status === 'paid' ? styles.paidStatusCard : styles.pendingStatusCard
+                                    { 
+                                        backgroundColor: selectedTrip.payment_status === 'paid' ? colors.primaryContainer : colors.tertiaryContainer,
+                                        borderRadius: borderRadius.large,
+                                    }
                                 ]}>
                                     {selectedTrip.payment_status === 'paid' ? (
-                                        <LucideCheckCircle size={24} color="#065F46" />
+                                        <LucideCheckCircle size={24} color={colors.primary} />
                                     ) : (
-                                        <LucideCircleDot size={24} color="#92400E" />
+                                        <LucideCircleDot size={24} color={colors.tertiary} />
                                     )}
                                     <View style={styles.paymentStatusInfo}>
                                         <Text style={[
                                             styles.paymentStatusText,
-                                            selectedTrip.payment_status === 'paid' ? { color: '#065F46' } : { color: '#92400E' }
+                                            { color: selectedTrip.payment_status === 'paid' ? colors.onPrimaryContainer : colors.onTertiaryContainer }
                                         ]}>
                                             {selectedTrip.payment_status === 'paid' ? 'Payment Completed' : 'Payment Pending'}
                                         </Text>
                                         {selectedTrip.payment_date && (
-                                            <Text style={styles.paymentDateText}>
+                                            <Text style={[styles.paymentDateText, { color: colors.onPrimaryContainer }]}>
                                                 Paid on {formatDateTime(selectedTrip.payment_date)}
                                             </Text>
                                         )}
@@ -394,115 +423,149 @@ export default function HistoryScreen() {
 
                                 {/* Mark as Paid button (Driver only) */}
                                 {profile?.role === 'driver' && selectedTrip.payment_status === 'pending' && (
-                                    <TouchableOpacity
-                                        style={styles.markPaidButton}
+                                    <Pressable
+                                        style={({ pressed }) => [
+                                            styles.markPaidButton,
+                                            { 
+                                                backgroundColor: colors.primary,
+                                                borderRadius: borderRadius.large,
+                                                opacity: pressed ? 0.8 : 1,
+                                            }
+                                        ]}
                                         onPress={() => markTripPaid(selectedTrip.id)}
                                     >
-                                        <LucideCheckCircle size={20} color={COLORS.white} />
-                                        <Text style={styles.markPaidText}>Mark as Paid</Text>
-                                    </TouchableOpacity>
+                                        <LucideCheckCircle size={20} color={colors.onPrimary} />
+                                        <Text style={[styles.markPaidText, { color: colors.onPrimary }]}>Mark as Paid</Text>
+                                    </Pressable>
                                 )}
 
                                 {/* Delete Trip button (Driver only) */}
                                 {profile?.role === 'driver' && (
-                                    <TouchableOpacity
-                                        style={styles.deleteTripButton}
+                                    <Pressable
+                                        style={({ pressed }) => [
+                                            styles.deleteTripButton,
+                                            { 
+                                                backgroundColor: colors.errorContainer,
+                                                borderRadius: borderRadius.large,
+                                                opacity: pressed ? 0.8 : 1,
+                                            }
+                                        ]}
                                         onPress={() => deleteTrip(selectedTrip.id)}
                                     >
-                                        <LucideTrash2 size={20} color={COLORS.error} />
-                                        <Text style={styles.deleteTripText}>Delete Trip</Text>
-                                    </TouchableOpacity>
+                                        <LucideTrash2 size={20} color={colors.error} />
+                                        <Text style={[styles.deleteTripText, { color: colors.error }]}>Delete Trip</Text>
+                                    </Pressable>
                                 )}
 
                                 {/* Close */}
-                                <TouchableOpacity style={styles.closeModalButton} onPress={closeModal}>
-                                    <Text style={styles.closeModalButtonText}>Close</Text>
-                                </TouchableOpacity>
+                                <Pressable 
+                                    style={({ pressed }) => [
+                                        styles.closeModalButton, 
+                                        { 
+                                            backgroundColor: colors.surfaceContainerHighest,
+                                            borderRadius: borderRadius.large,
+                                            opacity: pressed ? 0.8 : 1,
+                                        }
+                                    ]} 
+                                    onPress={closeModal}
+                                >
+                                    <Text style={[styles.closeModalButtonText, { color: colors.onSurface }]}>Close</Text>
+                                </Pressable>
                             </>
                         )}
                     </ScrollView>
-                </View>
-            </View>
+                </Pressable>
+            </Pressable>
         </Modal>
     );
 
     return (
         <SwipeableScreen>
-        <View style={styles.container}>
+        <Animated.View style={[styles.container, { backgroundColor: colors.surface, padding: spacing.lg, opacity: fadeAnim }]}>
             {/* Month Filter */}
-            <View style={styles.filter}>
-                <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.arrowButton}>
-                    <Text style={styles.arrow}>{"<"}</Text>
-                </TouchableOpacity>
-                <Text style={styles.month}>{monthNames[filterMonth]} {filterYear}</Text>
-                <TouchableOpacity onPress={() => changeMonth(1)} style={styles.arrowButton}>
-                    <Text style={styles.arrow}>{">"}</Text>
-                </TouchableOpacity>
+            <View style={[styles.filter, { backgroundColor: colors.surfaceContainerLow, borderRadius: borderRadius.large }]}>
+                <Pressable 
+                    onPress={() => changeMonth(-1)} 
+                    style={({ pressed }) => [styles.arrowButton, { opacity: pressed ? 0.6 : 1 }]}
+                >
+                    <LucideChevronLeft size={24} color={colors.primary} />
+                </Pressable>
+                <Text style={[styles.month, { color: colors.onSurface }]}>{monthNames[filterMonth]} {filterYear}</Text>
+                <Pressable 
+                    onPress={() => changeMonth(1)} 
+                    style={({ pressed }) => [styles.arrowButton, { opacity: pressed ? 0.6 : 1 }]}
+                >
+                    <LucideChevronRight size={24} color={colors.primary} />
+                </Pressable>
             </View>
 
             {/* Summary */}
             <View style={styles.summaryRow}>
-                <View style={[styles.summaryCard, { backgroundColor: COLORS.primary }]}>
-                    <Text style={styles.summaryLabel}>Total</Text>
-                    <Text style={styles.summaryAmount}>₹{totalFare}</Text>
+                <View style={[styles.summaryCard, { backgroundColor: colors.primary, borderRadius: borderRadius.large }]}>
+                    <Text style={[styles.summaryLabel, { color: colors.onPrimary }]}>Total</Text>
+                    <Text style={[styles.summaryAmount, { color: colors.onPrimary }]}>₹{totalFare}</Text>
                 </View>
-                <View style={[styles.summaryCard, { backgroundColor: COLORS.success }]}>
-                    <Text style={styles.summaryLabel}>Paid</Text>
-                    <Text style={styles.summaryAmount}>₹{paidFare}</Text>
+                <View style={[styles.summaryCard, { backgroundColor: colors.tertiary, borderRadius: borderRadius.large }]}>
+                    <Text style={[styles.summaryLabel, { color: colors.onTertiary }]}>Paid</Text>
+                    <Text style={[styles.summaryAmount, { color: colors.onTertiary }]}>₹{paidFare}</Text>
                 </View>
-                <View style={[styles.summaryCard, { backgroundColor: '#D97706' }]}>
-                    <Text style={styles.summaryLabel}>Pending</Text>
-                    <Text style={styles.summaryAmount}>₹{pendingFare}</Text>
+                <View style={[styles.summaryCard, { backgroundColor: colors.secondary, borderRadius: borderRadius.large }]}>
+                    <Text style={[styles.summaryLabel, { color: colors.onSecondary }]}>Pending</Text>
+                    <Text style={[styles.summaryAmount, { color: colors.onSecondary }]}>₹{pendingFare}</Text>
                 </View>
             </View>
 
             {/* Search & Filter */}
             <View style={styles.searchContainer}>
-                <View style={styles.searchBox}>
-                    <LucideSearch size={18} color={COLORS.gray[400]} />
+                <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow, borderRadius: borderRadius.large }]}>
+                    <LucideSearch size={18} color={colors.onSurfaceVariant} />
                     <TextInput
-                        style={styles.searchInput}
+                        style={[styles.searchInput, { color: colors.onSurface }]}
                         placeholder={profile?.role === 'driver' ? 'Search passengers...' : 'Search cars...'}
-                        placeholderTextColor={COLORS.gray[400]}
+                        placeholderTextColor={colors.onSurfaceVariant}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                     />
                     {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <LucideX size={18} color={COLORS.gray[400]} />
-                        </TouchableOpacity>
+                        <Pressable onPress={() => setSearchQuery('')}>
+                            <LucideX size={18} color={colors.onSurfaceVariant} />
+                        </Pressable>
                     )}
                 </View>
                 <View style={styles.filterRow}>
                     {['all', 'pending', 'paid'].map(status => (
-                        <TouchableOpacity
+                        <Pressable
                             key={status}
-                            style={[
+                            style={({ pressed }) => [
                                 styles.filterChip,
-                                statusFilter === status && styles.filterChipActive
+                                { 
+                                    backgroundColor: statusFilter === status ? colors.primary : colors.surfaceContainerHighest,
+                                    borderRadius: borderRadius.full,
+                                    opacity: pressed ? 0.8 : 1,
+                                }
                             ]}
                             onPress={() => setStatusFilter(status)}
                         >
                             <Text style={[
                                 styles.filterChipText,
-                                statusFilter === status && styles.filterChipTextActive
+                                { color: statusFilter === status ? colors.onPrimary : colors.onSurfaceVariant }
                             ]}>
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
                             </Text>
-                        </TouchableOpacity>
+                        </Pressable>
                     ))}
                 </View>
             </View>
 
             {/* Trip count */}
-            <Text style={styles.resultsCount}>
+            <Text style={[styles.resultsCount, { color: colors.onSurfaceVariant }]}>
                 {filteredTrips.length} trip{filteredTrips.length !== 1 ? 's' : ''}
                 {searchQuery || statusFilter !== 'all' ? ' (filtered)' : ''}
             </Text>
 
             {loading ? (
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={COLORS.primary} />
+                    <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             ) : (
                 <FlatList
@@ -511,8 +574,10 @@ export default function HistoryScreen() {
                     keyExtractor={item => item.id}
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
-                            <LucideCalendar size={48} color={COLORS.gray[400]} />
-                            <Text style={styles.empty}>
+                            <View style={[styles.emptyIconContainer, { backgroundColor: colors.surfaceContainerHighest }]}>
+                                <LucideInbox size={48} color={colors.onSurfaceVariant} />
+                            </View>
+                            <Text style={[styles.empty, { color: colors.onSurfaceVariant }]}>
                                 {searchQuery || statusFilter !== 'all' 
                                     ? 'No trips match your filters.' 
                                     : 'No trips found for this month.'}
@@ -523,7 +588,8 @@ export default function HistoryScreen() {
                         <RefreshControl
                             refreshing={refreshing}
                             onRefresh={onRefresh}
-                            colors={[COLORS.primary]}
+                            colors={[colors.primary]}
+                            tintColor={colors.primary}
                         />
                     }
                     contentContainerStyle={filteredTrips.length === 0 ? styles.emptyListContent : styles.listContent}
@@ -532,98 +598,91 @@ export default function HistoryScreen() {
             )}
 
             <TripDetailModal />
-        </View>
+        </Animated.View>
         </SwipeableScreen>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: SPACING.lg, backgroundColor: COLORS.background.light },
+    container: { flex: 1 },
     
     // Filter
-    filter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md, backgroundColor: COLORS.white, padding: SPACING.md, borderRadius: BORDER_RADIUS.lg, ...SHADOWS.sm },
-    arrowButton: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm },
-    arrow: { fontSize: 24, fontWeight: 'bold', color: COLORS.primary },
-    month: { fontSize: 18, fontWeight: '700', color: COLORS.text.primary },
+    filter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: 12, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+    arrowButton: { paddingHorizontal: 16, paddingVertical: 8 },
+    month: { fontSize: 18, fontWeight: '700' },
 
     // Summary
-    summaryRow: { flexDirection: 'row', marginBottom: SPACING.md, gap: SPACING.sm },
-    summaryCard: { flex: 1, padding: SPACING.md, borderRadius: BORDER_RADIUS.lg, alignItems: 'center', ...SHADOWS.sm },
-    summaryLabel: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
-    summaryAmount: { fontSize: 18, fontWeight: '700', color: COLORS.white, marginTop: 2 },
+    summaryRow: { flexDirection: 'row', marginBottom: 12, gap: 8 },
+    summaryCard: { flex: 1, padding: 12, alignItems: 'center', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+    summaryLabel: { fontSize: 12, fontWeight: '500', opacity: 0.9 },
+    summaryAmount: { fontSize: 18, fontWeight: '700', marginTop: 2 },
 
     // Search
-    searchContainer: { marginBottom: SPACING.sm },
-    searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: BORDER_RADIUS.lg, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, ...SHADOWS.sm, marginBottom: SPACING.sm },
-    searchInput: { flex: 1, marginLeft: SPACING.sm, fontSize: 14, color: COLORS.text.primary, paddingVertical: SPACING.xs },
-    filterRow: { flexDirection: 'row', gap: SPACING.sm },
-    filterChip: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs, borderRadius: BORDER_RADIUS.full, backgroundColor: COLORS.gray[100] },
-    filterChipActive: { backgroundColor: COLORS.primary },
-    filterChipText: { fontSize: 13, fontWeight: '500', color: COLORS.text.secondary },
-    filterChipTextActive: { color: COLORS.white },
-    resultsCount: { fontSize: 12, color: COLORS.text.secondary, marginBottom: SPACING.sm },
+    searchContainer: { marginBottom: 8 },
+    searchBox: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+    searchInput: { flex: 1, marginLeft: 8, fontSize: 14, paddingVertical: 4 },
+    filterRow: { flexDirection: 'row', gap: 8 },
+    filterChip: { paddingHorizontal: 12, paddingVertical: 6 },
+    filterChipText: { fontSize: 13, fontWeight: '500' },
+    resultsCount: { fontSize: 12, marginBottom: 8 },
 
     // Card
-    card: { backgroundColor: COLORS.white, padding: SPACING.lg, borderRadius: BORDER_RADIUS.lg, marginBottom: SPACING.md, ...SHADOWS.sm },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
+    card: { padding: 16, marginBottom: 12, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     dateContainer: { flexDirection: 'row', alignItems: 'center' },
-    cardDate: { fontWeight: '600', fontSize: 14, color: COLORS.text.primary, marginLeft: SPACING.xs },
-    statusBadge: { paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs, borderRadius: BORDER_RADIUS.full },
-    paidBadge: { backgroundColor: '#DEF7EC' },
-    pendingBadge: { backgroundColor: '#FEF3C7' },
+    cardDate: { fontWeight: '600', fontSize: 14, marginLeft: 6 },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 4 },
     statusText: { fontSize: 11, fontWeight: '700' },
-    paidText: { color: '#03543F' },
-    pendingText: { color: '#92400E' },
-    cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
+    cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     detailRow: { flexDirection: 'row', alignItems: 'center' },
-    cardDetail: { fontSize: 14, color: COLORS.text.secondary, marginLeft: SPACING.xs },
+    cardDetail: { fontSize: 14, marginLeft: 6 },
     fareContainer: { flexDirection: 'row', alignItems: 'baseline' },
-    fareLabel: { fontSize: 12, color: COLORS.text.secondary, marginRight: 2 },
-    fareAmount: { fontSize: 18, fontWeight: '700', color: COLORS.primary },
+    fareLabel: { fontSize: 12, marginRight: 2 },
+    fareAmount: { fontSize: 18, fontWeight: '700' },
     timeRow: { flexDirection: 'row', alignItems: 'center' },
-    cardTime: { color: COLORS.gray[400], fontSize: 12, marginLeft: SPACING.xs },
+    cardTime: { fontSize: 12, marginLeft: 6 },
 
     // Loading / Empty
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING.xxxl },
-    empty: { textAlign: 'center', color: COLORS.gray[500], marginTop: SPACING.lg, fontSize: 14 },
-    listContent: { paddingBottom: SPACING.xl },
+    emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48 },
+    emptyIconContainer: { width: 88, height: 88, borderRadius: 44, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+    empty: { textAlign: 'center', fontSize: 14 },
+    listContent: { paddingBottom: 24 },
     emptyListContent: { flexGrow: 1 },
 
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: COLORS.white, borderTopLeftRadius: BORDER_RADIUS.xl, borderTopRightRadius: BORDER_RADIUS.xl, padding: SPACING.xl, maxHeight: '85%' },
-    modalScrollContent: { paddingBottom: SPACING.md },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xl },
-    modalTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text.primary },
-    closeButton: { padding: SPACING.sm },
-    passengerHeader: { alignItems: 'center', marginBottom: SPACING.xl },
-    passengerAvatar: { width: 80, height: 80, borderRadius: 40, marginBottom: SPACING.md },
-    avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.primary + '20', justifyContent: 'center', alignItems: 'center', marginBottom: SPACING.md },
-    avatarText: { fontSize: 32, fontWeight: '700', color: COLORS.primary },
-    passengerName: { fontSize: 20, fontWeight: '700', color: COLORS.text.primary },
-    infoSection: { backgroundColor: COLORS.background.light, borderRadius: BORDER_RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.lg },
-    infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.gray[200] },
-    infoIconContainer: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.primary + '15', justifyContent: 'center', alignItems: 'center', marginRight: SPACING.md },
+    modalContent: { padding: 24, maxHeight: '85%' },
+    modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+    modalScrollContent: { paddingBottom: 12 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+    modalTitle: { fontSize: 20, fontWeight: '700' },
+    closeButton: { padding: 8 },
+    passengerHeader: { alignItems: 'center', marginBottom: 24 },
+    passengerAvatar: { width: 80, height: 80, borderRadius: 40, marginBottom: 12, borderWidth: 3 },
+    avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+    avatarText: { fontSize: 32, fontWeight: '700' },
+    passengerName: { fontSize: 20, fontWeight: '700' },
+    infoSection: { padding: 16, marginBottom: 16 },
+    infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+    infoIconContainer: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
     infoContent: { flex: 1 },
-    infoLabel: { fontSize: 12, color: COLORS.text.secondary, marginBottom: 2 },
-    infoValue: { fontSize: 15, color: COLORS.text.primary, fontWeight: '500' },
-    tripInfoSection: { marginBottom: SPACING.lg },
-    tripInfoTitle: { fontSize: 16, fontWeight: '600', color: COLORS.text.primary, marginBottom: SPACING.md },
-    tripInfoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
-    tripInfoItem: { width: '47%', backgroundColor: COLORS.background.light, padding: SPACING.md, borderRadius: BORDER_RADIUS.md, alignItems: 'center' },
-    tripInfoLabel: { fontSize: 11, color: COLORS.text.secondary, marginTop: SPACING.xs },
-    tripInfoValue: { fontSize: 14, fontWeight: '600', color: COLORS.text.primary, marginTop: 2 },
-    paymentStatusCard: { flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, borderRadius: BORDER_RADIUS.lg, marginBottom: SPACING.lg },
-    paidStatusCard: { backgroundColor: '#D1FAE5' },
-    pendingStatusCard: { backgroundColor: '#FEF3C7' },
-    paymentStatusInfo: { marginLeft: SPACING.md, flex: 1 },
+    infoLabel: { fontSize: 12, marginBottom: 2 },
+    infoValue: { fontSize: 15, fontWeight: '500' },
+    tripInfoSection: { marginBottom: 16 },
+    tripInfoTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
+    tripInfoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    tripInfoItem: { width: '47%', padding: 12, alignItems: 'center' },
+    tripInfoLabel: { fontSize: 11, marginTop: 6 },
+    tripInfoValue: { fontSize: 14, fontWeight: '600', marginTop: 2 },
+    paymentStatusCard: { flexDirection: 'row', alignItems: 'center', padding: 16, marginBottom: 16 },
+    paymentStatusInfo: { marginLeft: 12, flex: 1 },
     paymentStatusText: { fontSize: 16, fontWeight: '600' },
-    paymentDateText: { fontSize: 12, color: COLORS.text.secondary, marginTop: 2 },
-    markPaidButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.success, padding: SPACING.lg, borderRadius: BORDER_RADIUS.lg, marginBottom: SPACING.md, ...SHADOWS.md },
-    markPaidText: { color: COLORS.white, fontSize: 16, fontWeight: '600', marginLeft: SPACING.sm },
-    deleteTripButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.error + '10', padding: SPACING.lg, borderRadius: BORDER_RADIUS.lg, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.error },
-    deleteTripText: { color: COLORS.error, fontSize: 16, fontWeight: '600', marginLeft: SPACING.sm },
-    closeModalButton: { backgroundColor: COLORS.gray[100], padding: SPACING.lg, borderRadius: BORDER_RADIUS.lg, alignItems: 'center' },
-    closeModalButtonText: { color: COLORS.text.primary, fontSize: 16, fontWeight: '600' },
+    paymentDateText: { fontSize: 12, marginTop: 2, opacity: 0.8 },
+    markPaidButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+    markPaidText: { fontSize: 16, fontWeight: '600', marginLeft: 8 },
+    deleteTripButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, marginBottom: 12 },
+    deleteTripText: { fontSize: 16, fontWeight: '600', marginLeft: 8 },
+    closeModalButton: { padding: 16, alignItems: 'center' },
+    closeModalButtonText: { fontSize: 16, fontWeight: '600' },
 });

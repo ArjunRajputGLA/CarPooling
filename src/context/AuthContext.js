@@ -327,6 +327,31 @@ export const AuthProvider = ({ children }) => {
                 }
             } else if (data) {
                 console.log('Profile found:', data.email, 'Role:', data.role);
+                
+                // Check if this is a "zombie" deleted profile (from old soft-delete)
+                if (data.email?.includes('@deleted.com') || data.full_name === 'Deleted User') {
+                    console.log('Detected deleted user profile, blocking access');
+                    
+                    // Clean up the zombie record
+                    await supabase.from('users').delete().eq('id', userId);
+                    
+                    // Store deletion flag
+                    await AsyncStorage.setItem(`@deleted_user_${userId}`, 'true');
+                    
+                    Alert.alert(
+                        'Account Deleted',
+                        'This account has been permanently deleted. Please create a new account with a different email.',
+                        [{ text: 'OK' }]
+                    );
+                    
+                    await supabase.auth.signOut();
+                    setSession(null);
+                    setUser(null);
+                    setProfile(null);
+                    setLoading(false);
+                    return;
+                }
+                
                 setProfile(data);
                 setAuthError(null);
             }
@@ -341,6 +366,23 @@ export const AuthProvider = ({ children }) => {
     // Create a profile for user if it doesn't exist (handles account linking)
     const createProfileForUser = async (userId, authUserParam = null) => {
         try {
+            // Check if this user was previously deleted
+            const wasDeleted = await AsyncStorage.getItem(`@deleted_user_${userId}`);
+            if (wasDeleted === 'true') {
+                console.log('User was previously deleted, blocking profile creation');
+                Alert.alert(
+                    'Account Deleted',
+                    'This account has been permanently deleted. Please contact support or create a new account with a different email.',
+                    [{ text: 'OK' }]
+                );
+                await supabase.auth.signOut();
+                setSession(null);
+                setUser(null);
+                setProfile(null);
+                setLoading(false);
+                return;
+            }
+
             // Get user details from auth if not provided
             let authUser = authUserParam;
             if (!authUser) {

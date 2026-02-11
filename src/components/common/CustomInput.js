@@ -6,10 +6,9 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  Animated,
 } from 'react-native';
 import { LucideEye, LucideEyeOff, LucideCheck, LucideX } from 'lucide-react-native';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const CustomInput = ({
   label,
@@ -35,6 +34,7 @@ const CustomInput = ({
   inputStyle,
   ...props
 }) => {
+  const { colors, typography, spacing, borderRadius } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -49,11 +49,91 @@ const CustomInput = ({
   };
 
   const getBorderColor = () => {
-    if (error) return COLORS.error;
-    if (isFocused) return COLORS.primary;
-    if (isValid && showValidationIcon) return COLORS.success;
-    return COLORS.input.border;
+    if (error) return colors.error;
+    if (isFocused) return colors.primary;
+    if (isValid && showValidationIcon) return colors.success;
+    return colors.outline;
   };
+
+  const styles = StyleSheet.create({
+    container: {
+      marginBottom: spacing.md,
+    },
+    labelContainer: {
+      flexDirection: 'row',
+      marginBottom: spacing.xs,
+    },
+    label: {
+      fontSize: typography.labelMedium.fontSize,
+      fontWeight: typography.labelMedium.fontWeight,
+      color: colors.onSurface,
+      ...typography.labelMedium,
+    },
+    required: {
+      color: colors.error,
+      marginLeft: 2,
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.surfaceContainerHighest,
+      minHeight: 48,
+    },
+    inputFocused: {
+      borderWidth: 2,
+    },
+    inputError: {
+      borderColor: colors.error,
+    },
+    inputDisabled: {
+      backgroundColor: colors.surfaceContainerHigh,
+      opacity: 0.5,
+    },
+    input: {
+      flex: 1,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      fontSize: typography.bodyLarge.fontSize,
+      color: colors.onSurface,
+      minHeight: 48,
+      ...typography.bodyLarge,
+    },
+    inputWithLeftIcon: {
+      paddingLeft: spacing.xs,
+    },
+    inputWithRightIcon: {
+      paddingRight: spacing.xs,
+    },
+    multilineInput: {
+      textAlignVertical: 'top',
+      paddingTop: spacing.md,
+    },
+    leftIcon: {
+      paddingLeft: spacing.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    rightIcon: {
+      paddingRight: spacing.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    errorText: {
+      color: colors.error,
+      fontSize: typography.labelSmall.fontSize,
+      marginTop: spacing.xs,
+      ...typography.labelSmall,
+    },
+    charCount: {
+      color: colors.onSurfaceVariant,
+      fontSize: typography.labelSmall.fontSize,
+      textAlign: 'right',
+      marginTop: spacing.xs,
+      ...typography.labelSmall,
+    },
+  });
 
   return (
     <View style={[styles.container, style]}>
@@ -66,10 +146,11 @@ const CustomInput = ({
       
       <View style={[
         styles.inputContainer,
+        // borderColor handled by styles.inputContainer now dynamically or via override
         { borderColor: getBorderColor() },
         isFocused && styles.inputFocused,
         error && styles.inputError,
-        multiline && { height: numberOfLines * 40, alignItems: 'flex-start' },
+        multiline && { minHeight: numberOfLines * 24 + 24, alignItems: 'flex-start' }, /* Improved multiline height */
         !editable && styles.inputDisabled,
       ]}>
         {leftIcon && (
@@ -89,7 +170,7 @@ const CustomInput = ({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.input.placeholder}
+          placeholderTextColor={colors.onSurfaceVariant}
           secureTextEntry={secureTextEntry && !showPassword}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
@@ -109,9 +190,9 @@ const CustomInput = ({
             onPress={() => setShowPassword(!showPassword)}
           >
             {showPassword ? (
-              <LucideEyeOff size={20} color={COLORS.gray[500]} />
+              <LucideEyeOff size={20} color={colors.onSurfaceVariant} />
             ) : (
-              <LucideEye size={20} color={COLORS.gray[500]} />
+              <LucideEye size={20} color={colors.onSurfaceVariant} />
             )}
           </TouchableOpacity>
         )}
@@ -120,9 +201,9 @@ const CustomInput = ({
         {showValidationIcon && !secureTextEntry && value && (
           <View style={styles.rightIcon}>
             {isValid ? (
-              <LucideCheck size={20} color={COLORS.success} />
+              <LucideCheck size={20} color={colors.success} />
             ) : error ? (
-              <LucideX size={20} color={COLORS.error} />
+              <LucideX size={20} color={colors.error} />
             ) : null}
           </View>
         )}
@@ -149,75 +230,5 @@ const CustomInput = ({
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: SPACING.md,
-  },
-  labelContainer: {
-    flexDirection: 'row',
-    marginBottom: SPACING.xs,
-  },
-  label: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    fontWeight: TYPOGRAPHY.fontWeight.medium,
-    color: COLORS.text.primary,
-  },
-  required: {
-    color: COLORS.error,
-    marginLeft: 2,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.input.background,
-    minHeight: 48,
-  },
-  inputFocused: {
-    borderWidth: 2,
-  },
-  inputError: {
-    borderColor: COLORS.error,
-  },
-  inputDisabled: {
-    backgroundColor: COLORS.gray[100],
-  },
-  input: {
-    flex: 1,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.primary,
-  },
-  inputWithLeftIcon: {
-    paddingLeft: SPACING.xs,
-  },
-  inputWithRightIcon: {
-    paddingRight: SPACING.xs,
-  },
-  multilineInput: {
-    textAlignVertical: 'top',
-    paddingTop: SPACING.md,
-  },
-  leftIcon: {
-    paddingLeft: SPACING.md,
-  },
-  rightIcon: {
-    paddingRight: SPACING.md,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: TYPOGRAPHY.fontSize.xs,
-    marginTop: SPACING.xs,
-  },
-  charCount: {
-    color: COLORS.gray[500],
-    fontSize: TYPOGRAPHY.fontSize.xs,
-    textAlign: 'right',
-    marginTop: SPACING.xs,
-  },
-});
 
 export default CustomInput;

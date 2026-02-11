@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator, Animated } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { LucideCamera, LucideImage, LucideScanLine, LucideRefreshCw } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../constants/theme';
+import { LucideCamera, LucideImage, LucideScanLine, LucideRefreshCw, LucideCameraOff } from 'lucide-react-native';
 import { getTodayRange, getTodayString, verifyQRHash, formatTime } from '../utils/dateHelpers';
 import SwipeableScreen from '../components/common/SwipeableScreen';
 
@@ -15,11 +15,33 @@ const FARE_PER_TRIP = 31; // Fixed fare per scan from fare_settings
 
 export default function ScanScreen({ navigation }) {
     const { user } = useAuth();
+    const { colors, spacing, borderRadius } = useTheme();
     const [hasPermission, setHasPermission] = useState(null);
     const [scanned, setScanned] = useState(false);
     const [loading, setLoading] = useState(false);
     const [imageToScan, setImageToScan] = useState(null);
     const webViewRef = useRef(null);
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    
+    useEffect(() => {
+        // Pulse animation for scan frame
+        const pulse = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, {
+                    toValue: 1.05,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        pulse.start();
+        return () => pulse.stop();
+    }, []);
 
     useEffect(() => {
         const getPermissions = async () => {
@@ -305,25 +327,38 @@ export default function ScanScreen({ navigation }) {
 
     if (hasPermission === null) {
         return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text style={styles.permissionText}>Requesting camera permission...</Text>
+            <View style={[styles.centered, { backgroundColor: colors.surface }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[styles.permissionText, { color: colors.onSurfaceVariant }]}>Requesting camera permission...</Text>
             </View>
         );
     }
     
     if (hasPermission === false) {
         return (
-            <View style={styles.centered}>
-                <LucideCamera size={64} color={COLORS.gray[400]} />
-                <Text style={styles.noAccessTitle}>Camera Access Required</Text>
-                <Text style={styles.noAccessText}>
+            <View style={[styles.centered, { backgroundColor: colors.surface }]}>
+                <View style={[styles.noAccessIconContainer, { backgroundColor: colors.errorContainer }]}>
+                    <LucideCameraOff size={48} color={colors.error} />
+                </View>
+                <Text style={[styles.noAccessTitle, { color: colors.onSurface }]}>Camera Access Required</Text>
+                <Text style={[styles.noAccessText, { color: colors.onSurfaceVariant }]}>
                     Please enable camera access in your device settings to scan QR codes
                 </Text>
-                <TouchableOpacity style={styles.galleryOnlyButton} onPress={pickImageFromGallery}>
-                    <LucideImage size={20} color={COLORS.white} />
-                    <Text style={styles.galleryOnlyText}>Choose from Gallery</Text>
-                </TouchableOpacity>
+                <Pressable 
+                    style={({ pressed }) => [
+                        styles.galleryOnlyButton, 
+                        { 
+                            backgroundColor: colors.primary,
+                            borderRadius: borderRadius.large,
+                            opacity: pressed ? 0.8 : 1,
+                            transform: [{ scale: pressed ? 0.98 : 1 }],
+                        }
+                    ]} 
+                    onPress={pickImageFromGallery}
+                >
+                    <LucideImage size={20} color={colors.onPrimary} />
+                    <Text style={[styles.galleryOnlyText, { color: colors.onPrimary }]}>Choose from Gallery</Text>
+                </Pressable>
                 
                 {/* Hidden WebView for QR scanning */}
                 {imageToScan && (
@@ -339,9 +374,9 @@ export default function ScanScreen({ navigation }) {
                 
                 {loading && (
                     <View style={styles.loadingOverlay}>
-                        <View style={styles.loadingCard}>
-                            <ActivityIndicator size="large" color={COLORS.primary} />
-                            <Text style={styles.loadingText}>Scanning QR code...</Text>
+                        <View style={[styles.loadingCard, { backgroundColor: colors.surfaceContainerHigh, borderRadius: borderRadius.extraLarge }]}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={[styles.loadingText, { color: colors.onSurface }]}>Scanning QR code...</Text>
                         </View>
                     </View>
                 )}
@@ -354,9 +389,9 @@ export default function ScanScreen({ navigation }) {
         <View style={styles.container}>
             {loading ? (
                 <View style={styles.loadingContainer}>
-                    <View style={styles.loadingCard}>
-                        <ActivityIndicator size="large" color={COLORS.primary} />
-                        <Text style={styles.loadingText}>Processing...</Text>
+                    <View style={[styles.loadingCard, { backgroundColor: colors.surfaceContainerHigh, borderRadius: borderRadius.extraLarge }]}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={[styles.loadingText, { color: colors.onSurface }]}>Processing...</Text>
                     </View>
                 </View>
             ) : (
@@ -374,13 +409,13 @@ export default function ScanScreen({ navigation }) {
                         <View style={styles.overlayTop} />
                         <View style={styles.overlayMiddle}>
                             <View style={styles.overlaySide} />
-                            <View style={styles.scanFrame}>
-                                <View style={[styles.corner, styles.topLeft]} />
-                                <View style={[styles.corner, styles.topRight]} />
-                                <View style={[styles.corner, styles.bottomLeft]} />
-                                <View style={[styles.corner, styles.bottomRight]} />
+                            <Animated.View style={[styles.scanFrame, { transform: [{ scale: pulseAnim }] }]}>
+                                <View style={[styles.corner, styles.topLeft, { borderColor: colors.primary }]} />
+                                <View style={[styles.corner, styles.topRight, { borderColor: colors.primary }]} />
+                                <View style={[styles.corner, styles.bottomLeft, { borderColor: colors.primary }]} />
+                                <View style={[styles.corner, styles.bottomRight, { borderColor: colors.primary }]} />
                                 <LucideScanLine size={200} color="rgba(255,255,255,0.3)" style={styles.scanIcon} />
-                            </View>
+                            </Animated.View>
                             <View style={styles.overlaySide} />
                         </View>
                         <View style={styles.overlayBottom}>
@@ -393,23 +428,36 @@ export default function ScanScreen({ navigation }) {
                     {/* Bottom Controls */}
                     <View style={styles.controls}>
                         {scanned ? (
-                            <TouchableOpacity 
-                                style={styles.scanAgainButton} 
+                            <Pressable 
+                                style={({ pressed }) => [
+                                    styles.scanAgainButton, 
+                                    { 
+                                        backgroundColor: colors.primary,
+                                        borderRadius: borderRadius.full,
+                                        opacity: pressed ? 0.8 : 1,
+                                        transform: [{ scale: pressed ? 0.95 : 1 }],
+                                    }
+                                ]} 
                                 onPress={() => setScanned(false)}
-                                activeOpacity={0.8}
                             >
-                                <LucideRefreshCw size={22} color={COLORS.white} />
-                                <Text style={styles.scanAgainText}>Scan Again</Text>
-                            </TouchableOpacity>
+                                <LucideRefreshCw size={22} color={colors.onPrimary} />
+                                <Text style={[styles.scanAgainText, { color: colors.onPrimary }]}>Scan Again</Text>
+                            </Pressable>
                         ) : (
-                            <TouchableOpacity 
-                                style={styles.galleryButton} 
+                            <Pressable 
+                                style={({ pressed }) => [
+                                    styles.galleryButton, 
+                                    { 
+                                        borderRadius: borderRadius.full,
+                                        opacity: pressed ? 0.8 : 1,
+                                        transform: [{ scale: pressed ? 0.95 : 1 }],
+                                    }
+                                ]} 
                                 onPress={pickImageFromGallery}
-                                activeOpacity={0.8}
                             >
-                                <LucideImage size={22} color={COLORS.white} />
+                                <LucideImage size={22} color="#FFFFFF" />
                                 <Text style={styles.galleryText}>Gallery</Text>
-                            </TouchableOpacity>
+                            </Pressable>
                         )}
                     </View>
                 </>
@@ -440,40 +488,41 @@ const styles = StyleSheet.create({
         flex: 1, 
         justifyContent: 'center', 
         alignItems: 'center',
-        backgroundColor: COLORS.background.light,
-        padding: SPACING.xl,
+        padding: 24,
     },
     permissionText: {
-        marginTop: SPACING.md,
+        marginTop: 12,
         fontSize: 16,
-        color: COLORS.text.secondary,
+    },
+    noAccessIconContainer: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
     },
     noAccessTitle: {
         fontSize: 20,
         fontWeight: '600',
-        color: COLORS.text.primary,
-        marginTop: SPACING.lg,
-        marginBottom: SPACING.sm,
+        marginTop: 16,
+        marginBottom: 8,
     },
     noAccessText: {
         fontSize: 14,
-        color: COLORS.text.secondary,
         textAlign: 'center',
-        marginBottom: SPACING.xl,
+        marginBottom: 24,
     },
     galleryOnlyButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.primary,
-        paddingHorizontal: SPACING.xl,
-        paddingVertical: SPACING.md,
-        borderRadius: BORDER_RADIUS.lg,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
     },
     galleryOnlyText: {
-        color: COLORS.white,
         fontSize: 16,
         fontWeight: '600',
-        marginLeft: SPACING.sm,
+        marginLeft: 8,
     },
     loadingContainer: {
         flex: 1,
@@ -488,16 +537,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     loadingCard: {
-        backgroundColor: COLORS.white,
-        padding: SPACING.xl,
-        borderRadius: BORDER_RADIUS.xl,
+        padding: 24,
         alignItems: 'center',
-        ...SHADOWS.lg,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
     },
     loadingText: {
-        marginTop: SPACING.md,
+        marginTop: 12,
         fontSize: 16,
-        color: COLORS.text.primary,
         fontWeight: '500',
     },
     overlay: {
@@ -524,7 +574,6 @@ const styles = StyleSheet.create({
         position: 'absolute',
         width: 30,
         height: 30,
-        borderColor: COLORS.primary,
     },
     topLeft: {
         top: 0,
@@ -561,10 +610,10 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
         alignItems: 'center',
-        paddingTop: SPACING.xl,
+        paddingTop: 24,
     },
     instructionText: {
-        color: COLORS.white,
+        color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '500',
         textAlign: 'center',
@@ -579,32 +628,32 @@ const styles = StyleSheet.create({
     scanAgainButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.primary,
-        paddingHorizontal: SPACING.xl,
-        paddingVertical: SPACING.md,
-        borderRadius: BORDER_RADIUS.full,
-        ...SHADOWS.md,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
     },
     scanAgainText: {
-        color: COLORS.white,
         fontSize: 16,
         fontWeight: '600',
-        marginLeft: SPACING.sm,
+        marginLeft: 8,
     },
     galleryButton: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: SPACING.xl,
-        paddingVertical: SPACING.md,
-        borderRadius: BORDER_RADIUS.full,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.3)',
     },
     galleryText: {
-        color: COLORS.white,
+        color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '600',
-        marginLeft: SPACING.sm,
+        marginLeft: 8,
     },
 });

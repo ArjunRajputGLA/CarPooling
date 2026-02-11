@@ -1,30 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
+  Animated,
 } from 'react-native';
 import { LucideLock, LucideCheckCircle, LucideShieldCheck } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { checkPasswordStrength } from '../../utils/validation';
-import { CustomInput, PasswordStrengthIndicator, LoadingSpinner } from '../../components/common';
+import { 
+  CustomInput, 
+  PasswordStrengthIndicator, 
+  M3Button,
+  ButtonVariant,
+  M3LoadingDialog,
+  M3ErrorDialog,
+} from '../../components/common';
 
 export default function ResetPasswordScreen({ navigation }) {
   const { updatePassword, signOut } = useAuth();
+  const { colors, spacing, borderRadius, isDark } = useTheme();
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState(false);
+  const [errorDialog, setErrorDialog] = useState({ visible: false, title: '', message: '' });
 
   const passwordStrength = checkPasswordStrength(newPassword);
+
+  // Animation effect
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const validateForm = () => {
     const newErrors = {};
@@ -66,9 +95,7 @@ export default function ResetPasswordScreen({ navigation }) {
         errorMessage = error.message;
       }
 
-      Alert.alert('Reset Failed', errorMessage, [{ text: 'OK' }], {
-        cancelable: true,
-      });
+      setErrorDialog({ visible: true, title: 'Reset Failed', message: errorMessage });
     } finally {
       setLoading(false);
     }
@@ -85,33 +112,41 @@ export default function ResetPasswordScreen({ navigation }) {
 
   if (success) {
     return (
-      <View style={styles.container}>
-        <View style={styles.successContainer}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Animated.View style={[
+          styles.successContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}>
           <View style={styles.successIcon}>
-            <LucideCheckCircle size={72} color={COLORS.success} />
+            <LucideCheckCircle size={72} color={colors.secondary} />
           </View>
 
-          <Text style={styles.successTitle}>Password Reset!</Text>
-          <Text style={styles.successText}>
+          <Text style={[styles.successTitle, { color: colors.onSurface }]}>Password Reset!</Text>
+          <Text style={[styles.successText, { color: colors.onSurfaceVariant }]}>
             Your password has been successfully updated.{'\n'}You can now sign in
             with your new password.
           </Text>
 
-          <TouchableOpacity
-            style={styles.loginButton}
+          <Pressable
+            style={({ pressed }) => [
+              styles.loginButton,
+              { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 }
+            ]}
             onPress={handleBackToLogin}
-            activeOpacity={0.8}
           >
-            <Text style={styles.loginButtonText}>Back to Login</Text>
-          </TouchableOpacity>
-        </View>
+            <Text style={[styles.loginButtonText, { color: colors.onPrimary }]}>Back to Login</Text>
+          </Pressable>
+        </Animated.View>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
@@ -120,18 +155,31 @@ export default function ResetPasswordScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View style={styles.headerContainer}>
-          <View style={styles.iconCircle}>
-            <LucideShieldCheck size={44} color={COLORS.primary} />
+        <Animated.View style={[
+          styles.headerContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}>
+          <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>
+            <LucideShieldCheck size={44} color={colors.primary} />
           </View>
-          <Text style={styles.title}>Set New Password</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: colors.onSurface }]}>Set New Password</Text>
+          <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
             Create a strong password that you don't use for other accounts.
           </Text>
-        </View>
+        </Animated.View>
 
         {/* Form Card */}
-        <View style={styles.formCard}>
+        <Animated.View style={[
+          styles.formCard,
+          {
+            backgroundColor: colors.surface,
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}>
           {/* New Password */}
           <CustomInput
             label="New Password"
@@ -143,7 +191,7 @@ export default function ResetPasswordScreen({ navigation }) {
             placeholder="Enter new password"
             secureTextEntry
             error={errors.newPassword}
-            leftIcon={<LucideLock size={20} color={COLORS.gray[500]} />}
+            leftIcon={<LucideLock size={20} color={colors.onSurfaceVariant} />}
           />
 
           {/* Password Strength */}
@@ -163,58 +211,59 @@ export default function ResetPasswordScreen({ navigation }) {
             placeholder="Confirm new password"
             secureTextEntry
             error={errors.confirmPassword}
-            leftIcon={<LucideLock size={20} color={COLORS.gray[500]} />}
+            leftIcon={<LucideLock size={20} color={colors.onSurfaceVariant} />}
           />
 
           {/* Password Requirements */}
-          <View style={styles.requirementsContainer}>
-            <Text style={styles.requirementsTitle}>Password must have:</Text>
-            <RequirementItem met={passwordStrength.hasMinLength} text="At least 8 characters" />
-            <RequirementItem met={passwordStrength.hasUpperCase} text="One uppercase letter" />
-            <RequirementItem met={passwordStrength.hasLowerCase} text="One lowercase letter" />
-            <RequirementItem met={passwordStrength.hasNumber} text="One number" />
-            <RequirementItem met={passwordStrength.hasSpecial} text="One special character (recommended)" optional />
+          <View style={[styles.requirementsContainer, { backgroundColor: colors.surfaceVariant }]}>
+            <Text style={[styles.requirementsTitle, { color: colors.onSurface }]}>Password must have:</Text>
+            <RequirementItem met={passwordStrength.hasMinLength} text="At least 8 characters" colors={colors} />
+            <RequirementItem met={passwordStrength.hasUpperCase} text="One uppercase letter" colors={colors} />
+            <RequirementItem met={passwordStrength.hasLowerCase} text="One lowercase letter" colors={colors} />
+            <RequirementItem met={passwordStrength.hasNumber} text="One number" colors={colors} />
+            <RequirementItem met={passwordStrength.hasSpecial} text="One special character (recommended)" optional colors={colors} />
           </View>
 
           {/* Submit Button */}
-          <TouchableOpacity
-            style={[
-              styles.resetButton,
-              (!passwordStrength.isValid || !confirmPassword) &&
-                styles.resetButtonDisabled,
-            ]}
+          <M3Button
+            variant={ButtonVariant.FILLED}
             onPress={handleResetPassword}
             disabled={loading || !passwordStrength.isValid || !confirmPassword}
-            activeOpacity={0.8}
+            loading={loading}
+            style={{ marginTop: 8 }}
           >
-            {loading ? (
-              <LoadingSpinner visible size="small" color={COLORS.white} />
-            ) : (
-              <Text style={styles.resetButtonText}>Reset Password</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+            Reset Password
+          </M3Button>
+        </Animated.View>
       </ScrollView>
 
-      {/* Loading Overlay */}
-      <LoadingSpinner visible={loading} message="Updating password..." overlay />
+      {/* Loading Dialog */}
+      <M3LoadingDialog visible={loading} message="Updating password..." />
+      
+      {/* Error Dialog */}
+      <M3ErrorDialog
+        visible={errorDialog.visible}
+        title={errorDialog.title}
+        message={errorDialog.message}
+        onDismiss={() => setErrorDialog({ visible: false, title: '', message: '' })}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 // Requirement checklist item
-const RequirementItem = ({ met, text, optional }) => (
+const RequirementItem = ({ met, text, optional, colors }) => (
   <View style={styles.requirementRow}>
     <View
       style={[
         styles.requirementDot,
-        met ? styles.requirementMet : styles.requirementUnmet,
+        { backgroundColor: met ? colors.secondary : colors.outline },
       ]}
     />
     <Text
       style={[
         styles.requirementText,
-        met && styles.requirementTextMet,
+        { color: met ? colors.secondary : colors.onSurfaceVariant },
         optional && !met && styles.requirementOptional,
       ]}
     >
@@ -226,59 +275,60 @@ const RequirementItem = ({ met, text, optional }) => (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background.light,
   },
   scrollContent: {
     flexGrow: 1,
-    padding: SPACING.xl,
-    paddingTop: SPACING.xxxl + SPACING.xl,
+    padding: 24,
+    paddingTop: 72,
     justifyContent: 'center',
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: SPACING.xxl,
+    marginBottom: 32,
   },
   iconCircle: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: COLORS.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
-    ...SHADOWS.md,
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   title: {
-    fontSize: TYPOGRAPHY.fontSize.xxl,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
-    marginBottom: SPACING.sm,
+    fontSize: 26,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
+    fontSize: 16,
     textAlign: 'center',
     lineHeight: 22,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: 12,
   },
   formCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.xl,
-    ...SHADOWS.md,
+    borderRadius: 24,
+    padding: 24,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   requirementsContainer: {
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.lg,
-    padding: SPACING.md,
-    backgroundColor: COLORS.gray[50],
-    borderRadius: BORDER_RADIUS.md,
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 12,
   },
   requirementsTitle: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    fontWeight: TYPOGRAPHY.fontWeight.semiBold,
-    color: COLORS.text.primary,
-    marginBottom: SPACING.sm,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   requirementRow: {
     flexDirection: 'row',
@@ -289,76 +339,65 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: SPACING.sm,
-  },
-  requirementMet: {
-    backgroundColor: COLORS.success,
-  },
-  requirementUnmet: {
-    backgroundColor: COLORS.gray[300],
+    marginRight: 8,
   },
   requirementText: {
-    fontSize: TYPOGRAPHY.fontSize.sm,
-    color: COLORS.text.secondary,
-  },
-  requirementTextMet: {
-    color: COLORS.success,
+    fontSize: 14,
   },
   requirementOptional: {
     fontStyle: 'italic',
   },
   resetButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
-    marginTop: SPACING.sm,
-    ...SHADOWS.md,
-  },
-  resetButtonDisabled: {
-    backgroundColor: COLORS.gray[400],
+    marginTop: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   resetButtonText: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    fontSize: 18,
+    fontWeight: '700',
   },
   // Success screen
   successContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SPACING.xl,
+    padding: 24,
   },
   successIcon: {
-    marginBottom: SPACING.xl,
+    marginBottom: 24,
   },
   successTitle: {
     fontSize: 28,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    color: COLORS.text.primary,
-    marginBottom: SPACING.md,
+    fontWeight: '700',
+    marginBottom: 12,
   },
   successText: {
-    fontSize: TYPOGRAPHY.fontSize.md,
-    color: COLORS.text.secondary,
+    fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: SPACING.xxl,
-    paddingHorizontal: SPACING.lg,
+    marginBottom: 32,
+    paddingHorizontal: 16,
   },
   loginButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.xxxl * 1.5,
-    borderRadius: BORDER_RADIUS.md,
-    ...SHADOWS.md,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   loginButtonText: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSize.lg,
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    fontSize: 18,
+    fontWeight: '700',
   },
 });

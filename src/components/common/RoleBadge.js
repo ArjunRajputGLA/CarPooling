@@ -1,33 +1,48 @@
-// Role Badge Component
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+// Role Badge Component - Material Design 3
+import React, { useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { LucideCar, LucideUser } from 'lucide-react-native';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
-const RoleBadge = ({ role, size = 'medium' }) => {
+const RoleBadge = ({ role, size = 'medium', animated = true }) => {
+  const { colors, borderRadius, spacing, typography } = useTheme();
+  const scaleAnim = useRef(new Animated.Value(0)).current;
   const isDriver = role === 'driver';
+  
+  useEffect(() => {
+    if (animated) {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 6,
+        tension: 120,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      scaleAnim.setValue(1);
+    }
+  }, [animated]);
   
   const getSizeStyles = () => {
     switch (size) {
       case 'small':
         return {
-          paddingHorizontal: SPACING.sm,
-          paddingVertical: SPACING.xs,
-          fontSize: TYPOGRAPHY.fontSize.xs,
+          paddingHorizontal: spacing.sm,
+          paddingVertical: spacing.xs,
+          fontSize: typography.labelSmall.fontSize,
           iconSize: 12,
         };
       case 'large':
         return {
-          paddingHorizontal: SPACING.xl,
-          paddingVertical: SPACING.md,
-          fontSize: TYPOGRAPHY.fontSize.lg,
+          paddingHorizontal: spacing.xl,
+          paddingVertical: spacing.md,
+          fontSize: typography.labelLarge.fontSize,
           iconSize: 20,
         };
       default:
         return {
-          paddingHorizontal: SPACING.md,
-          paddingVertical: SPACING.sm,
-          fontSize: TYPOGRAPHY.fontSize.sm,
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.sm,
+          fontSize: typography.labelMedium.fontSize,
           iconSize: 16,
         };
     }
@@ -35,30 +50,41 @@ const RoleBadge = ({ role, size = 'medium' }) => {
 
   const sizeStyles = getSizeStyles();
 
+  // MD3 tonal colors
+  const backgroundColor = isDriver 
+    ? colors.tertiaryContainer 
+    : colors.primaryContainer;
+  const textColor = isDriver 
+    ? colors.onTertiaryContainer 
+    : colors.onPrimaryContainer;
+
   return (
-    <View style={[
+    <Animated.View style={[
       styles.container,
       {
-        backgroundColor: isDriver ? COLORS.driverBadge : COLORS.passengerBadge,
+        backgroundColor,
         paddingHorizontal: sizeStyles.paddingHorizontal,
         paddingVertical: sizeStyles.paddingVertical,
+        borderRadius: borderRadius.full,
+        transform: [{ scale: scaleAnim }],
       },
     ]}>
       {isDriver ? (
-        <LucideCar size={sizeStyles.iconSize} color={isDriver ? COLORS.black : COLORS.white} />
+        <LucideCar size={sizeStyles.iconSize} color={textColor} />
       ) : (
-        <LucideUser size={sizeStyles.iconSize} color={COLORS.white} />
+        <LucideUser size={sizeStyles.iconSize} color={textColor} />
       )}
       <Text style={[
         styles.text,
         {
           fontSize: sizeStyles.fontSize,
-          color: isDriver ? COLORS.black : COLORS.white,
+          color: textColor,
+          marginLeft: spacing.xs,
         },
       ]}>
         {isDriver ? 'DRIVER' : 'PASSENGER'}
       </Text>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -66,12 +92,11 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: BORDER_RADIUS.full,
   },
   text: {
-    fontWeight: TYPOGRAPHY.fontWeight.bold,
-    marginLeft: SPACING.xs,
+    fontWeight: '600',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });
 

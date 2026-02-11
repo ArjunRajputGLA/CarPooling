@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, ActivityIndicator, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, StyleSheet, ActivityIndicator, Alert, ScrollView, Pressable, Animated } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../constants/theme';
-import { LucideCar, LucideQrCode, LucideCalendar, LucideIndianRupee } from 'lucide-react-native';
+import { LucideCar, LucideQrCode, LucideCalendar, LucideIndianRupee, LucidePlus } from 'lucide-react-native';
 import { getTodayString, getTodayRange, generateQRHash, formatDateLong } from '../utils/dateHelpers';
 import SwipeableScreen from '../components/common/SwipeableScreen';
 
@@ -12,12 +12,32 @@ const FARE_PER_TRIP = 31; // Fixed fare per scan from fare_settings
 
 export default function QRCodeScreen() {
     const { user } = useAuth();
+    const { colors, spacing, borderRadius, typography, isDark } = useTheme();
     const [car, setCar] = useState(null);
     const [loading, setLoading] = useState(true);
     const [carName, setCarName] = useState('');
     const [licensePlate, setLicensePlate] = useState('');
     const [saving, setSaving] = useState(false);
     const [todayStats, setTodayStats] = useState({ trips: 0, earnings: 0 });
+    
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new Animated.Value(0.9)).current;
+    
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 400,
+                useNativeDriver: true,
+            }),
+            Animated.spring(scaleAnim, {
+                toValue: 1,
+                tension: 50,
+                friction: 7,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, []);
 
     useEffect(() => {
         fetchCar();
@@ -107,41 +127,69 @@ export default function QRCodeScreen() {
         }
     };
 
-    if (loading) return <View style={styles.centered}><ActivityIndicator /></View>;
+    if (loading) return <View style={[styles.centered, { backgroundColor: colors.surface }]}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
     if (!car) {
         return (
-            <View style={styles.addCarContainer}>
-                <View style={styles.iconContainer}>
-                    <LucideCar size={64} color={COLORS.primary} />
+            <Animated.View style={[
+                styles.addCarContainer, 
+                { backgroundColor: colors.surface, opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
+            ]}>
+                <View style={[styles.iconContainer, { backgroundColor: colors.primaryContainer }]}>
+                    <LucideCar size={64} color={colors.primary} />
                 </View>
-                <Text style={styles.title}>Add Your Car</Text>
-                <Text style={styles.subtitle}>Register your car to start generating QR codes for passengers</Text>
+                <Text style={[styles.title, { color: colors.onSurface }]}>Add Your Car</Text>
+                <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>Register your car to start generating QR codes for passengers</Text>
 
                 <TextInput
-                    style={styles.input}
+                    style={[
+                        styles.input, 
+                        { 
+                            borderColor: colors.outline,
+                            backgroundColor: colors.surfaceContainerLow,
+                            color: colors.onSurface,
+                            borderRadius: borderRadius.large,
+                        }
+                    ]}
                     placeholder="Car Name (e.g. Red Toyota)"
-                    placeholderTextColor={COLORS.gray[400]}
+                    placeholderTextColor={colors.onSurfaceVariant}
                     value={carName}
                     onChangeText={setCarName}
                 />
                 <TextInput
-                    style={styles.input}
+                    style={[
+                        styles.input, 
+                        { 
+                            borderColor: colors.outline,
+                            backgroundColor: colors.surfaceContainerLow,
+                            color: colors.onSurface,
+                            borderRadius: borderRadius.large,
+                        }
+                    ]}
                     placeholder="License Plate (e.g. MH 12 AB 1234)"
-                    placeholderTextColor={COLORS.gray[400]}
+                    placeholderTextColor={colors.onSurfaceVariant}
                     value={licensePlate}
                     onChangeText={setLicensePlate}
                     autoCapitalize="characters"
                 />
 
-                <TouchableOpacity 
-                    style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
+                <Pressable 
+                    style={({ pressed }) => [
+                        styles.saveButton, 
+                        { 
+                            backgroundColor: colors.primary,
+                            borderRadius: borderRadius.large,
+                            opacity: saving ? 0.6 : pressed ? 0.8 : 1,
+                            transform: [{ scale: pressed ? 0.98 : 1 }],
+                        }
+                    ]} 
                     onPress={handleAddCar} 
                     disabled={saving}
                 >
-                    <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Save Car"}</Text>
-                </TouchableOpacity>
-            </View>
+                    <LucidePlus size={20} color={colors.onPrimary} style={{ marginRight: 8 }} />
+                    <Text style={[styles.saveButtonText, { color: colors.onPrimary }]}>{saving ? "Saving..." : "Save Car"}</Text>
+                </Pressable>
+            </Animated.View>
         );
     }
 
@@ -158,59 +206,67 @@ export default function QRCodeScreen() {
 
     return (
         <SwipeableScreen>
-        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-            {/* Car Info Header */}
-            <View style={styles.carHeader}>
-                <LucideCar size={24} color={COLORS.primary} />
-                <View style={styles.carInfo}>
-                    <Text style={styles.carName}>{car.car_name}</Text>
-                    <Text style={styles.licensePlate}>{car.license_plate}</Text>
-                </View>
-            </View>
-
-            {/* Today's Stats */}
-            <View style={styles.statsContainer}>
-                <View style={styles.statCard}>
-                    <LucideQrCode size={20} color={COLORS.primary} />
-                    <Text style={styles.statValue}>{todayStats.trips}</Text>
-                    <Text style={styles.statLabel}>Scans Today</Text>
-                </View>
-                <View style={styles.statCard}>
-                    <LucideIndianRupee size={20} color={COLORS.success} />
-                    <Text style={[styles.statValue, { color: COLORS.success }]}>₹{todayStats.earnings}</Text>
-                    <Text style={styles.statLabel}>Today's Earnings</Text>
-                </View>
-            </View>
-
-            {/* QR Code */}
-            <View style={styles.qrCard}>
-                <View style={styles.dateHeader}>
-                    <LucideCalendar size={16} color={COLORS.text.secondary} />
-                    <Text style={styles.dateText}>{formatDateLong(today)}</Text>
-                </View>
-                
-                <View style={styles.qrContainer}>
-                    <QRCode
-                        value={qrData}
-                        size={220}
-                        backgroundColor="white"
-                    />
+        <ScrollView 
+            contentContainerStyle={[styles.container, { backgroundColor: colors.surface, padding: spacing.lg }]} 
+            showsVerticalScrollIndicator={false}
+        >
+            <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+                {/* Car Info Header */}
+                <View style={[styles.carHeader, { backgroundColor: colors.surfaceContainerLow, borderRadius: borderRadius.large }]}>
+                    <View style={[styles.carIconBox, { backgroundColor: colors.primaryContainer, borderRadius: borderRadius.medium }]}>
+                        <LucideCar size={24} color={colors.primary} />
+                    </View>
+                    <View style={styles.carInfo}>
+                        <Text style={[styles.carName, { color: colors.onSurface }]}>{car.car_name}</Text>
+                        <Text style={[styles.licensePlate, { color: colors.onSurfaceVariant }]}>{car.license_plate}</Text>
+                    </View>
                 </View>
 
-                <View style={styles.fareInfo}>
-                    <Text style={styles.fareLabel}>Fare per scan</Text>
-                    <Text style={styles.fareAmount}>₹{FARE_PER_TRIP}</Text>
+                {/* Today's Stats */}
+                <View style={styles.statsContainer}>
+                    <View style={[styles.statCard, { backgroundColor: colors.primaryContainer, borderRadius: borderRadius.large }]}>
+                        <LucideQrCode size={20} color={colors.primary} />
+                        <Text style={[styles.statValue, { color: colors.onPrimaryContainer }]}>{todayStats.trips}</Text>
+                        <Text style={[styles.statLabel, { color: colors.onPrimaryContainer }]}>Scans Today</Text>
+                    </View>
+                    <View style={[styles.statCard, { backgroundColor: colors.tertiaryContainer, borderRadius: borderRadius.large }]}>
+                        <LucideIndianRupee size={20} color={colors.tertiary} />
+                        <Text style={[styles.statValue, { color: colors.onTertiaryContainer }]}>₹{todayStats.earnings}</Text>
+                        <Text style={[styles.statLabel, { color: colors.onTertiaryContainer }]}>Today's Earnings</Text>
+                    </View>
                 </View>
-            </View>
 
-            {/* Instructions */}
-            <View style={styles.instructions}>
-                <Text style={styles.instructionTitle}>How it works</Text>
-                <Text style={styles.instructionText}>• This QR code is valid for today only</Text>
-                <Text style={styles.instructionText}>• Passengers can scan multiple times</Text>
-                <Text style={styles.instructionText}>• Each scan adds ₹{FARE_PER_TRIP} to their total</Text>
-                <Text style={styles.instructionText}>• A new QR is generated automatically each day</Text>
-            </View>
+                {/* QR Code */}
+                <View style={[styles.qrCard, { backgroundColor: colors.surfaceContainerLow, borderRadius: borderRadius.extraLarge }]}>
+                    <View style={styles.dateHeader}>
+                        <LucideCalendar size={16} color={colors.onSurfaceVariant} />
+                        <Text style={[styles.dateText, { color: colors.onSurfaceVariant }]}>{formatDateLong(today)}</Text>
+                    </View>
+                    
+                    <View style={[styles.qrContainer, { borderRadius: borderRadius.large, borderColor: colors.outlineVariant }]}>
+                        <QRCode
+                            value={qrData}
+                            size={220}
+                            backgroundColor="white"
+                            color={isDark ? '#1a1a1a' : '#000000'}
+                        />
+                    </View>
+
+                    <View style={[styles.fareInfo, { borderTopColor: colors.outlineVariant }]}>
+                        <Text style={[styles.fareLabel, { color: colors.onSurfaceVariant }]}>Fare per scan</Text>
+                        <Text style={[styles.fareAmount, { color: colors.primary }]}>₹{FARE_PER_TRIP}</Text>
+                    </View>
+                </View>
+
+                {/* Instructions */}
+                <View style={[styles.instructions, { backgroundColor: colors.secondaryContainer, borderRadius: borderRadius.large }]}>
+                    <Text style={[styles.instructionTitle, { color: colors.onSecondaryContainer }]}>How it works</Text>
+                    <Text style={[styles.instructionText, { color: colors.onSecondaryContainer }]}>• This QR code is valid for today only</Text>
+                    <Text style={[styles.instructionText, { color: colors.onSecondaryContainer }]}>• Passengers can scan multiple times</Text>
+                    <Text style={[styles.instructionText, { color: colors.onSecondaryContainer }]}>• Each scan adds ₹{FARE_PER_TRIP} to their total</Text>
+                    <Text style={[styles.instructionText, { color: colors.onSecondaryContainer }]}>• A new QR is generated automatically each day</Text>
+                </View>
+            </Animated.View>
         </ScrollView>
         </SwipeableScreen>
     );
@@ -219,8 +275,6 @@ export default function QRCodeScreen() {
 const styles = StyleSheet.create({
     container: { 
         flexGrow: 1, 
-        padding: SPACING.lg,
-        backgroundColor: COLORS.background.light,
     },
     centered: { 
         flex: 1, 
@@ -231,162 +285,150 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: SPACING.xl,
-        backgroundColor: COLORS.background.light,
+        padding: 24,
     },
     iconContainer: {
         width: 100,
         height: 100,
         borderRadius: 50,
-        backgroundColor: COLORS.primary + '15',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: SPACING.lg,
+        marginBottom: 16,
     },
     title: { 
         fontSize: 24, 
         fontWeight: 'bold', 
-        color: COLORS.text.primary,
-        marginBottom: SPACING.sm,
+        marginBottom: 8,
     },
     subtitle: { 
         fontSize: 14, 
-        color: COLORS.text.secondary, 
-        marginBottom: SPACING.xl, 
+        marginBottom: 24, 
         textAlign: 'center',
-        paddingHorizontal: SPACING.lg,
+        paddingHorizontal: 16,
     },
     input: { 
         borderWidth: 1, 
-        borderColor: COLORS.gray[300], 
-        padding: SPACING.md, 
-        marginBottom: SPACING.md, 
-        borderRadius: BORDER_RADIUS.lg, 
+        padding: 16, 
+        marginBottom: 12, 
         width: '100%',
-        backgroundColor: COLORS.white,
         fontSize: 16,
-        color: COLORS.text.primary,
     },
     saveButton: {
-        backgroundColor: COLORS.primary,
-        paddingVertical: SPACING.md,
-        paddingHorizontal: SPACING.xxl,
-        borderRadius: BORDER_RADIUS.lg,
-        marginTop: SPACING.md,
-        width: '100%',
+        flexDirection: 'row',
         alignItems: 'center',
-    },
-    saveButtonDisabled: {
-        opacity: 0.6,
+        justifyContent: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 32,
+        marginTop: 12,
+        width: '100%',
     },
     saveButtonText: {
-        color: COLORS.white,
         fontSize: 16,
         fontWeight: '600',
     },
     carHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.white,
-        padding: SPACING.md,
-        borderRadius: BORDER_RADIUS.lg,
-        marginBottom: SPACING.md,
-        ...SHADOWS.sm,
+        padding: 16,
+        marginBottom: 12,
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+    },
+    carIconBox: {
+        width: 44,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     carInfo: {
-        marginLeft: SPACING.md,
+        marginLeft: 12,
     },
     carName: {
         fontSize: 18,
         fontWeight: '600',
-        color: COLORS.text.primary,
     },
     licensePlate: {
         fontSize: 14,
-        color: COLORS.text.secondary,
+        marginTop: 2,
     },
     statsContainer: {
         flexDirection: 'row',
-        gap: SPACING.md,
-        marginBottom: SPACING.lg,
+        gap: 12,
+        marginBottom: 16,
     },
     statCard: {
         flex: 1,
-        backgroundColor: COLORS.white,
-        padding: SPACING.md,
-        borderRadius: BORDER_RADIUS.lg,
+        padding: 16,
         alignItems: 'center',
-        ...SHADOWS.sm,
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
     },
     statValue: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: COLORS.text.primary,
-        marginTop: SPACING.xs,
+        marginTop: 6,
     },
     statLabel: {
         fontSize: 12,
-        color: COLORS.text.secondary,
         marginTop: 2,
     },
     qrCard: {
-        backgroundColor: COLORS.white,
-        borderRadius: BORDER_RADIUS.xl,
-        padding: SPACING.lg,
+        padding: 20,
         alignItems: 'center',
-        ...SHADOWS.md,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
     },
     dateHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: SPACING.md,
+        marginBottom: 16,
     },
     dateText: {
-        marginLeft: SPACING.sm,
+        marginLeft: 8,
         fontSize: 14,
-        color: COLORS.text.secondary,
     },
     qrContainer: { 
-        padding: SPACING.lg, 
+        padding: 16, 
         backgroundColor: 'white', 
-        borderRadius: BORDER_RADIUS.lg,
         borderWidth: 2,
-        borderColor: COLORS.gray[200],
     },
     fareInfo: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         width: '100%',
-        marginTop: SPACING.lg,
-        paddingTop: SPACING.md,
+        marginTop: 16,
+        paddingTop: 12,
         borderTopWidth: 1,
-        borderTopColor: COLORS.gray[200],
     },
     fareLabel: {
         fontSize: 14,
-        color: COLORS.text.secondary,
     },
     fareAmount: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: COLORS.primary,
     },
     instructions: {
-        marginTop: SPACING.lg,
-        backgroundColor: COLORS.primary + '10',
-        padding: SPACING.md,
-        borderRadius: BORDER_RADIUS.lg,
+        marginTop: 16,
+        padding: 16,
     },
     instructionTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: COLORS.primary,
-        marginBottom: SPACING.sm,
+        marginBottom: 8,
     },
     instructionText: {
         fontSize: 13,
-        color: COLORS.text.secondary,
         marginBottom: 4,
+        lineHeight: 20,
     },
 });
