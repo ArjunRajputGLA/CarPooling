@@ -8,7 +8,6 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   Animated,
 } from 'react-native';
 import { LucideCarFront, LucideUser, LucideMail, LucideLock, LucidePhone, LucideMapPin, LucideAlertCircle } from 'lucide-react-native';
@@ -33,6 +32,9 @@ import {
   M3LoadingDialog,
   CustomInput,
   LoadingSpinner,
+  M3ErrorDialog,
+  M3SuccessDialog,
+  M3ConfirmDialog,
 } from '../../components/common';
 
 // Driver email constant
@@ -70,6 +72,12 @@ export default function RegisterScreen({ navigation }) {
 
   // Toast state
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  
+  // Dialog states
+  const [errorDialog, setErrorDialog] = useState({ visible: false, title: '', message: '' });
+  const [successDialog, setSuccessDialog] = useState({ visible: false, role: '' });
+  const [accountExistsDialog, setAccountExistsDialog] = useState(false);
+  const [validationErrorDialog, setValidationErrorDialog] = useState(false);
 
   // Validate fields in real-time
   useEffect(() => {
@@ -238,12 +246,7 @@ export default function RegisterScreen({ navigation }) {
     });
 
     if (!isFormValid()) {
-      Alert.alert(
-        'Validation Error',
-        'Please fix all the errors before submitting.',
-        [{ text: 'OK' }],
-        { cancelable: true }
-      );
+      setValidationErrorDialog(true);
       return;
     }
 
@@ -301,6 +304,9 @@ export default function RegisterScreen({ navigation }) {
         phone: phone,
         role: role,
         profile_picture_url: profilePictureUrl,
+        emergency_contact_name: emergencyContactName.trim() || null,
+        emergency_contact_phone: emergencyContactPhone ? `${emergencyCountryCode}${emergencyContactPhone}` : null,
+        home_address: homeAddress.trim() || null,
       };
 
       const { error: profileError } = await supabase
@@ -313,12 +319,7 @@ export default function RegisterScreen({ navigation }) {
       }
 
       // 5. Show success message
-      Alert.alert(
-        'Registration Successful! 🎉',
-        `Welcome to CarPooling! You are registered as a ${role}.`,
-        [{ text: 'OK' }],
-        { cancelable: true }
-      );
+      setSuccessDialog({ visible: true, role });
 
       // If session exists, user is already logged in (email confirmation disabled)
       // The auth state listener in AuthContext will handle navigation automatically
@@ -330,19 +331,7 @@ export default function RegisterScreen({ navigation }) {
       let errorMessage = 'Registration failed. Please try again.';
       
       if (error.message?.includes('already registered') || error.message?.includes('already been registered') || error.message?.includes('already exists') || error.message?.includes('User already registered')) {
-        Alert.alert(
-          'Account Already Exists',
-          'An account with this email is already registered. Please sign in instead.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Go to Login', 
-              onPress: () => navigation.navigate('Login'),
-              style: 'default',
-            },
-          ],
-          { cancelable: true }
-        );
+        setAccountExistsDialog(true);
         return;
       } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
         errorMessage = 'Network error. Please check your internet connection.';
@@ -350,23 +339,17 @@ export default function RegisterScreen({ navigation }) {
         errorMessage = error.message;
       } else if (error.code === '42501') {
         // RLS policy error - profile creation failed but user was created
-        Alert.alert(
-          'Account Created',
-          'Your account was created. Please login.',
-          [{ text: 'OK', onPress: () => navigation.navigate('Login') }],
-          { cancelable: false }
-        );
+        setSuccessDialog({ visible: true, role: 'passenger', needsLogin: true });
         return;
       } else if (error.message) {
         errorMessage = error.message;
       }
       
-      Alert.alert(
-        'Registration Failed',
-        errorMessage,
-        [{ text: 'OK' }],
-        { cancelable: true }
-      );
+      setErrorDialog({
+        visible: true,
+        title: 'Registration Failed',
+        message: errorMessage,
+      });
     } finally {
       setLoading(false);
     }
@@ -569,6 +552,50 @@ export default function RegisterScreen({ navigation }) {
       <M3LoadingDialog
         visible={loading}
         message="Creating your account..."
+      />
+      
+      {/* Validation Error Dialog */}
+      <M3ErrorDialog
+        visible={validationErrorDialog}
+        onDismiss={() => setValidationErrorDialog(false)}
+        title="Validation Error"
+        message="Please fix all the errors in the form before submitting."
+      />
+      
+      {/* Generic Error Dialog */}
+      <M3ErrorDialog
+        visible={errorDialog.visible}
+        onDismiss={() => setErrorDialog({ visible: false, title: '', message: '' })}
+        title={errorDialog.title}
+        message={errorDialog.message}
+      />
+      
+      {/* Success Dialog */}
+      <M3SuccessDialog
+        visible={successDialog.visible}
+        onDismiss={() => {
+          setSuccessDialog({ visible: false, role: '' });
+          if (successDialog.needsLogin) {
+            navigation.navigate('Login');
+          }
+        }}
+        title="Registration Successful! 🎉"
+        message={`Welcome to CarPooling! You are registered as a ${successDialog.role}.`}
+        autoDismiss={false}
+      />
+      
+      {/* Account Exists Dialog */}
+      <M3ConfirmDialog
+        visible={accountExistsDialog}
+        onDismiss={() => setAccountExistsDialog(false)}
+        onConfirm={() => {
+          setAccountExistsDialog(false);
+          navigation.navigate('Login');
+        }}
+        title="Account Already Exists"
+        message="An account with this email is already registered. Please sign in instead."
+        confirmLabel="Go to Login"
+        cancelLabel="Cancel"
       />
     </KeyboardAvoidingView>
   );

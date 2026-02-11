@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 import { LucideCamera, LucideImage, LucideScanLine, LucideRefreshCw, LucideCameraOff } from 'lucide-react-native';
 import { getTodayRange, getTodayString, verifyQRHash, formatTime } from '../utils/dateHelpers';
 import SwipeableScreen from '../components/common/SwipeableScreen';
+import { M3TripSuccessDialog, M3AlreadyLoggedDialog, M3ErrorDialog } from '../components/common';
 
 const FARE_PER_TRIP = 31; // Fixed fare per scan from fare_settings
 
@@ -21,6 +22,17 @@ export default function ScanScreen({ navigation }) {
     const [loading, setLoading] = useState(false);
     const [imageToScan, setImageToScan] = useState(null);
     const webViewRef = useRef(null);
+    
+    // Dialog states
+    const [tripSuccessDialog, setTripSuccessDialog] = useState({ 
+        visible: false, 
+        tripType: '', 
+        scanNumber: 1, 
+        fareAmount: FARE_PER_TRIP, 
+        todayTotal: FARE_PER_TRIP 
+    });
+    const [alreadyLoggedDialog, setAlreadyLoggedDialog] = useState(false);
+    const [errorDialog, setErrorDialog] = useState({ visible: false, message: '' });
     const pulseAnim = useRef(new Animated.Value(1)).current;
     
     useEffect(() => {
@@ -60,7 +72,7 @@ export default function ScanScreen({ navigation }) {
         try {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Required', 'Please allow access to your photo library to scan QR codes from images.');
+                setErrorDialog({ visible: true, title: 'Permission Required', message: 'Please allow access to your photo library to scan QR codes from images.' });
                 return;
             }
 
@@ -87,13 +99,13 @@ export default function ScanScreen({ navigation }) {
                     setImageToScan(manipResult.base64);
                 } catch (error) {
                     console.error('Image manipulation error:', error);
-                    Alert.alert('Error', 'Failed to process image');
+                    setErrorDialog({ visible: true, title: 'Error', message: 'Failed to process image' });
                     setLoading(false);
                 }
             }
         } catch (error) {
             console.error('Gallery error:', error);
-            Alert.alert('Error', 'Failed to open gallery');
+            setErrorDialog({ visible: true, title: 'Error', message: 'Failed to open gallery' });
             setLoading(false);
         }
     };
@@ -108,18 +120,10 @@ export default function ScanScreen({ navigation }) {
             await processQRData(qrData);
         } else if (message === 'QR_NOT_FOUND') {
             setLoading(false);
-            Alert.alert(
-                'QR Code Not Found',
-                'Could not detect a QR code in the selected image. Please make sure the QR code is clearly visible and centered.',
-                [{ text: 'OK' }]
-            );
+            setErrorDialog({ visible: true, title: 'QR Code Not Found', message: 'Could not detect a QR code in the selected image. Please make sure the QR code is clearly visible and centered.' });
         } else if (message.startsWith('ERROR:')) {
             setLoading(false);
-            Alert.alert(
-                'Scan Failed',
-                'Failed to scan QR code. Please try with a clearer image or use the camera.',
-                [{ text: 'OK' }]
-            );
+            setErrorDialog({ visible: true, title: 'Scan Failed', message: 'Failed to scan QR code. Please try with a clearer image or use the camera.' });
         }
     };
 
@@ -187,33 +191,21 @@ export default function ScanScreen({ navigation }) {
             // Verify QR code date
             const today = getTodayString();
             if (date !== today) {
-                Alert.alert(
-                    'Expired QR Code',
-                    'This QR code was generated for a different date and is no longer valid. Please ask the driver for today\'s QR code.',
-                    [{ text: 'OK', onPress: () => setScanned(false) }]
-                );
+                setErrorDialog({ visible: true, title: 'Expired QR Code', message: 'This QR code was generated for a different date and is no longer valid. Please ask the driver for today\'s QR code.' });
                 setLoading(false);
                 return;
             }
 
             // Verify QR hash if present (security check)
             if (hash && !verifyQRHash(carId, driverId, date, hash)) {
-                Alert.alert(
-                    'Invalid QR Code',
-                    'This QR code could not be verified. It may have been tampered with.',
-                    [{ text: 'OK', onPress: () => setScanned(false) }]
-                );
+                setErrorDialog({ visible: true, title: 'Invalid QR Code', message: 'This QR code could not be verified. It may have been tampered with.' });
                 setLoading(false);
                 return;
             }
 
             // Prevent scanning own QR code
             if (driverId === user.id) {
-                Alert.alert(
-                    'Cannot Scan Own Code',
-                    'You cannot scan your own QR code.',
-                    [{ text: 'OK', onPress: () => setScanned(false) }]
-                );
+                setErrorDialog({ visible: true, title: 'Cannot Scan Own Code', message: 'You cannot scan your own QR code.' });
                 setLoading(false);
                 return;
             }
@@ -221,11 +213,7 @@ export default function ScanScreen({ navigation }) {
             await logTrip({ carId, driverId, date });
 
         } catch (error) {
-            Alert.alert(
-                'Scan Error',
-                error.message || 'Invalid QR Code scanned',
-                [{ text: 'Scan Again', onPress: () => setScanned(false) }]
-            );
+            setErrorDialog({ visible: true, title: 'Scan Error', message: error.message || 'Invalid QR Code scanned' });
             setLoading(false);
         }
     };
@@ -245,11 +233,7 @@ export default function ScanScreen({ navigation }) {
 
             if (!recentError && recentTrips && recentTrips.length > 0) {
                 const lastScanTime = formatTime(recentTrips[0].scan_timestamp);
-                Alert.alert(
-                    'Duplicate Scan',
-                    `You already scanned this QR code at ${lastScanTime}. Please wait at least 5 minutes between scans.`,
-                    [{ text: 'OK', onPress: () => setScanned(false) }]
-                );
+                setAlreadyLoggedDialog(true);
                 setLoading(false);
                 return;
             }
@@ -269,11 +253,11 @@ export default function ScanScreen({ navigation }) {
 
             // Limit to max 2 trips per day per car (going + coming)
             if (tripCount >= 2) {
-                Alert.alert(
-                    'Daily Limit Reached',
-                    'You have already logged 2 trips today (going & coming). Maximum 2 scans per day per car.',
-                    [{ text: 'OK', onPress: () => setScanned(false) }]
-                );
+                setErrorDialog({
+                    visible: true,
+                    title: 'Daily Limit Reached',
+                    message: 'You have already logged 2 trips today (going & coming). Maximum 2 scans per day per car.'
+                });
                 setLoading(false);
                 return;
             }
@@ -293,11 +277,7 @@ export default function ScanScreen({ navigation }) {
 
             if (insertError) {
                 if (insertError.message?.includes('duplicate') || insertError.code === '23505') {
-                    Alert.alert(
-                        'Already Logged',
-                        'This trip has already been recorded.',
-                        [{ text: 'OK', onPress: () => setScanned(false) }]
-                    );
+                    setAlreadyLoggedDialog(true);
                 } else {
                     throw insertError;
                 }
@@ -306,11 +286,13 @@ export default function ScanScreen({ navigation }) {
             }
 
             const tripLabel = tripCount === 0 ? 'Going' : 'Return';
-            Alert.alert(
-                'Trip Logged! 🎉',
-                `${tripLabel} trip recorded (Scan #${tripCount + 1})\n\nThis scan: ₹${FARE_PER_TRIP}\nToday's Total: ₹${newTotal}`,
-                [{ text: 'OK', onPress: () => setScanned(false) }]
-            );
+            setTripSuccessDialog({
+                visible: true,
+                tripType: tripLabel,
+                scanNumber: tripCount + 1,
+                fareAmount: FARE_PER_TRIP,
+                todayTotal: newTotal
+            });
         } catch (error) {
             console.error('Log trip error:', error);
             let msg = 'Failed to log trip';
@@ -319,7 +301,7 @@ export default function ScanScreen({ navigation }) {
             } else if (error.message) {
                 msg = error.message;
             }
-            Alert.alert('Error', msg, [{ text: 'OK', onPress: () => setScanned(false) }]);
+            setErrorDialog({ visible: true, title: 'Error', message: msg });
         } finally {
             setLoading(false);
         }
@@ -474,6 +456,37 @@ export default function ScanScreen({ navigation }) {
                     javaScriptEnabled={true}
                 />
             )}
+
+            {/* Enhanced Dialogs */}
+            <M3TripSuccessDialog
+                visible={tripSuccessDialog.visible}
+                tripType={tripSuccessDialog.tripType}
+                scanNumber={tripSuccessDialog.scanNumber}
+                fareAmount={tripSuccessDialog.fareAmount}
+                todayTotal={tripSuccessDialog.todayTotal}
+                onDismiss={() => {
+                    setTripSuccessDialog(prev => ({ ...prev, visible: false }));
+                    setScanned(false);
+                }}
+            />
+
+            <M3AlreadyLoggedDialog
+                visible={alreadyLoggedDialog}
+                onDismiss={() => {
+                    setAlreadyLoggedDialog(false);
+                    setScanned(false);
+                }}
+            />
+
+            <M3ErrorDialog
+                visible={errorDialog.visible}
+                title={errorDialog.title || 'Error'}
+                message={errorDialog.message}
+                onDismiss={() => {
+                    setErrorDialog({ visible: false, message: '' });
+                    setScanned(false);
+                }}
+            />
         </View>
         </SwipeableScreen>
     );

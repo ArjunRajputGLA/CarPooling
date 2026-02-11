@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { 
     View, 
     Text, 
@@ -136,6 +136,142 @@ const TripItem = React.memo(({ item, index, markAsPaid, deleteTrip }) => {
                 )}
             </View>
         </Pressable>
+        </Animated.View>
+    );
+});
+
+// Grouped Trip Item - shows passenger once with all their trips
+const GroupedTripItem = React.memo(({ item, index, markAsPaid, deleteTrip }) => {
+    const { colors, borderRadius, spacing } = useTheme();
+    const itemAnim = useRef(new Animated.Value(0)).current;
+    
+    useEffect(() => {
+        Animated.spring(itemAnim, {
+            toValue: 1,
+            friction: 8,
+            tension: 40,
+            delay: index * 80,
+            useNativeDriver: true,
+        }).start();
+    }, []);
+
+    const passenger = item.passenger;
+    const trips = item.trips;
+    const totalFare = trips.reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
+    const allPaid = trips.every(t => t.payment_status === 'paid');
+    const pendingCount = trips.filter(t => t.payment_status !== 'paid').length;
+    
+    return (
+        <Animated.View style={{
+            opacity: itemAnim,
+            transform: [{ 
+                translateY: itemAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0],
+                })
+            }],
+            marginBottom: spacing.md,
+        }}>
+            <View
+                style={[
+                    styles.groupedTripCard,
+                    {
+                        backgroundColor: colors.surfaceContainerLow,
+                        borderRadius: borderRadius.large,
+                    }
+                ]}
+            >
+                {/* Passenger Header */}
+                <View style={styles.groupedPassengerHeader}>
+                    <View style={styles.passengerInfo}>
+                        <View style={[styles.passengerAvatar, { backgroundColor: colors.primaryContainer }]}>
+                            <Text style={[styles.passengerInitial, { color: colors.onPrimaryContainer }]}>
+                                {passenger?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                            </Text>
+                        </View>
+                        <View style={styles.passengerDetails}>
+                            <Text style={[styles.passengerName, { color: colors.onSurface }]}>
+                                {passenger?.full_name || 'Unknown Passenger'}
+                            </Text>
+                            <Text style={[styles.passengerPhone, { color: colors.onSurfaceVariant }]}>
+                                {passenger?.phone || 'No phone'}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.groupedSummary}>
+                        <Text style={[styles.groupedTripCount, { color: colors.onSurfaceVariant }]}>
+                            {trips.length} {trips.length === 1 ? 'trip' : 'trips'}
+                        </Text>
+                        <Text style={[styles.groupedTotalFare, { color: colors.onSurface }]}>
+                            ₹{totalFare}
+                        </Text>
+                    </View>
+                </View>
+
+                {/* Individual Trips */}
+                {trips.map((trip, tripIndex) => {
+                    const tripLabel = tripIndex === 0 ? 'Going' : tripIndex === 1 ? 'Return' : `Trip ${tripIndex + 1}`;
+                    const isLast = tripIndex === trips.length - 1;
+                    
+                    return (
+                        <Pressable
+                            key={trip.id}
+                            style={[
+                                styles.groupedTripRow,
+                                { borderTopColor: colors.outlineVariant },
+                                !isLast && { borderBottomWidth: 0 }
+                            ]}
+                            onLongPress={() => deleteTrip(trip.id, passenger?.full_name || 'Unknown')}
+                            delayLongPress={600}
+                        >
+                            <View style={styles.tripRowLeft}>
+                                <View style={[
+                                    styles.tripTypeBadge, 
+                                    { backgroundColor: tripIndex === 0 ? colors.primaryContainer : colors.tertiaryContainer }
+                                ]}>
+                                    <Text style={[
+                                        styles.tripTypeText, 
+                                        { color: tripIndex === 0 ? colors.primary : colors.tertiary }
+                                    ]}>
+                                        {tripLabel}
+                                    </Text>
+                                </View>
+                                <View style={styles.tripRowTime}>
+                                    <LucideClock size={12} color={colors.onSurfaceVariant} />
+                                    <Text style={[styles.tripRowTimeText, { color: colors.onSurfaceVariant }]}>
+                                        {formatTime(trip.scan_timestamp)}
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={styles.tripRowRight}>
+                                <Text style={[styles.tripRowFare, { color: colors.onSurface }]}>
+                                    ₹{trip.fare_amount || FARE_PER_TRIP}
+                                </Text>
+                                {trip.payment_status === 'paid' ? (
+                                    <View style={[styles.miniStatusButton, { backgroundColor: colors.primaryContainer }]}>
+                                        <LucideCheckCircle size={14} color={colors.primary} />
+                                        <Text style={[styles.miniStatusText, { color: colors.primary }]}>Paid</Text>
+                                    </View>
+                                ) : (
+                                    <Pressable
+                                        style={({ pressed }) => [
+                                            styles.miniStatusButton, 
+                                            { 
+                                                backgroundColor: colors.tertiaryContainer,
+                                                opacity: pressed ? 0.8 : 1,
+                                            }
+                                        ]}
+                                        onPress={() => markAsPaid(trip.id, passenger?.full_name || 'Unknown')}
+                                    >
+                                        <LucideCircleDot size={14} color={colors.tertiary} />
+                                        <Text style={[styles.miniStatusText, { color: colors.tertiary }]}>Mark Paid</Text>
+                                    </Pressable>
+                                )}
+                            </View>
+                        </Pressable>
+                    );
+                })}
+            </View>
         </Animated.View>
     );
 });
@@ -468,6 +604,41 @@ export default function DriverDashboard() {
         fetchTrips();
     }, []);
 
+    // Group trips by passenger for Today's Trips display
+    const groupedTrips = useMemo(() => {
+        const grouped = {};
+        trips.forEach(trip => {
+            const passengerId = trip.passenger_id;
+            if (!grouped[passengerId]) {
+                grouped[passengerId] = {
+                    id: passengerId,
+                    passenger: trip.passenger,
+                    trips: []
+                };
+            }
+            grouped[passengerId].trips.push(trip);
+        });
+        // Sort trips within each group by timestamp (oldest first for Going/Return order)
+        Object.values(grouped).forEach(group => {
+            group.trips.sort((a, b) => new Date(a.scan_timestamp) - new Date(b.scan_timestamp));
+        });
+        // Return as array, sorted by most recent trip
+        return Object.values(grouped).sort((a, b) => {
+            const aLatest = Math.max(...a.trips.map(t => new Date(t.scan_timestamp)));
+            const bLatest = Math.max(...b.trips.map(t => new Date(t.scan_timestamp)));
+            return bLatest - aLatest;
+        });
+    }, [trips]);
+
+    const renderGroupedTripItem = useCallback(({ item, index }) => (
+        <GroupedTripItem 
+            item={item} 
+            index={index} 
+            markAsPaid={markAsPaid} 
+            deleteTrip={deleteTrip} 
+        />
+    ), [markAsPaid, deleteTrip]);
+
     const renderTripItem = useCallback(({ item, index }) => (
         <TripItem 
             item={item} 
@@ -513,10 +684,7 @@ export default function DriverDashboard() {
                             <Text style={[styles.pendingAmountValue, { color: colors.tertiary }]}>₹{item.pendingAmount}</Text>
                         </>
                     ) : (
-                        <>
-                            <Text style={[styles.paidAmountLabel, { color: colors.primary }]}>All Paid</Text>
-                            <LucideCheckCircle size={16} color={colors.primary} />
-                        </>
+                        <LucideCheckCircle size={20} color={colors.primary} />
                     )}
                 </View>
             </View>
@@ -751,8 +919,8 @@ export default function DriverDashboard() {
         <SwipeableScreen>
         <View style={[styles.container, { backgroundColor: colors.surface }]}>
             <FlatList
-                data={trips}
-                renderItem={renderTripItem}
+                data={groupedTrips}
+                renderItem={renderGroupedTripItem}
                 keyExtractor={item => item.id}
                 refreshControl={
                     <RefreshControl 
@@ -873,6 +1041,23 @@ const styles = StyleSheet.create({
     fareAmount: { fontSize: 18, fontWeight: '700' },
     statusButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
     statusText: { fontSize: 14, fontWeight: '600', marginLeft: 6 },
+
+    // Grouped Trip Card
+    groupedTripCard: { padding: 0, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, overflow: 'hidden' },
+    groupedPassengerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12 },
+    groupedSummary: { alignItems: 'flex-end' },
+    groupedTripCount: { fontSize: 12 },
+    groupedTotalFare: { fontSize: 16, fontWeight: '700' },
+    groupedTripRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1 },
+    tripRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    tripTypeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    tripTypeText: { fontSize: 12, fontWeight: '600' },
+    tripRowTime: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    tripRowTimeText: { fontSize: 12 },
+    tripRowRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    tripRowFare: { fontSize: 14, fontWeight: '600' },
+    miniStatusButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
+    miniStatusText: { fontSize: 12, fontWeight: '600', marginLeft: 4 },
 
     // Empty
     emptyContainer: { alignItems: 'center', paddingVertical: 48 },

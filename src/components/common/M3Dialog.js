@@ -23,6 +23,11 @@ import {
   LucideX,
   LucideShieldCheck,
   LucideTrash2,
+  LucideUserX,
+  LucideLock,
+  LucidePartyPopper,
+  LucideCar,
+  LucideWallet,
 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { M3Button, ButtonVariant } from './M3Button';
@@ -652,5 +657,296 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 });
+
+/**
+ * Account Not Found Dialog - Enhanced Login Error
+ */
+export const M3AccountNotFoundDialog = ({
+  visible,
+  onDismiss,
+  onSignUp,
+  email,
+}) => {
+  const { colors, typography } = useTheme();
+  
+  return (
+    <M3Dialog
+      visible={visible}
+      onDismiss={onDismiss}
+      title="Account Not Found"
+      icon={<LucideUserX />}
+      iconColor={colors.warning || colors.tertiary}
+      iconBackgroundColor={`${colors.warning || colors.tertiary}15`}
+      showCloseButton
+      actions={[
+        {
+          label: 'Cancel',
+          onPress: onDismiss,
+          variant: 'secondary',
+        },
+        {
+          label: 'Sign Up',
+          onPress: () => {
+            onDismiss?.();
+            onSignUp?.();
+          },
+          variant: 'primary',
+        },
+      ]}
+    >
+      <View style={{ marginBottom: 8 }}>
+        <Text style={{ 
+          color: colors.onSurfaceVariant, 
+          fontSize: 15, 
+          lineHeight: 22,
+          textAlign: 'center',
+        }}>
+          No account exists with{'\n'}
+          <Text style={{ fontWeight: '600', color: colors.onSurface }}>{email}</Text>
+        </Text>
+        <Text style={{ 
+          color: colors.onSurfaceVariant, 
+          fontSize: 14, 
+          lineHeight: 20,
+          textAlign: 'center',
+          marginTop: 12,
+        }}>
+          Would you like to create a new account?
+        </Text>
+      </View>
+    </M3Dialog>
+  );
+};
+
+/**
+ * Incorrect Password Dialog - Enhanced Login Error
+ */
+export const M3IncorrectPasswordDialog = ({
+  visible,
+  onDismiss,
+  onForgotPassword,
+}) => {
+  const { colors } = useTheme();
+  
+  return (
+    <M3Dialog
+      visible={visible}
+      onDismiss={onDismiss}
+      title="Incorrect Password"
+      icon={<LucideLock />}
+      iconColor={colors.error}
+      iconBackgroundColor={colors.errorLight || `${colors.error}15`}
+      showCloseButton
+      actions={[
+        {
+          label: 'Try Again',
+          onPress: onDismiss,
+          variant: 'secondary',
+        },
+        {
+          label: 'Reset Password',
+          onPress: () => {
+            onDismiss?.();
+            onForgotPassword?.();
+          },
+          variant: 'primary',
+        },
+      ]}
+    >
+      <Text style={{ 
+        color: colors.onSurfaceVariant, 
+        fontSize: 15, 
+        lineHeight: 22,
+        textAlign: 'center',
+        marginBottom: 8,
+      }}>
+        The password you entered is incorrect.{'\n'}Please try again or reset your password.
+      </Text>
+    </M3Dialog>
+  );
+};
+
+/**
+ * Trip Logged Success Dialog - Enhanced Celebration
+ */
+export const M3TripSuccessDialog = ({
+  visible,
+  onDismiss,
+  tripType = 'Going', // 'Going' or 'Return'
+  scanNumber = 1,
+  fareAmount = 31,
+  todayTotal = 31,
+  autoDismiss = false,
+  autoDismissDelay = 3000,
+}) => {
+  const { colors, typography, borderRadius } = useTheme();
+  const scaleAnim = useRef(new Animated.Value(0.5)).current;
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    if (visible) {
+      // Celebration animation
+      Animated.sequence([
+        Animated.spring(scaleAnim, {
+          toValue: 1.2,
+          useNativeDriver: true,
+          friction: 4,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          friction: 5,
+        }),
+      ]).start();
+      
+      // Bounce animation for fare display
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(bounceAnim, {
+            toValue: -5,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(bounceAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+        { iterations: 2 }
+      ).start();
+      
+      if (autoDismiss) {
+        const timer = setTimeout(() => {
+          onDismiss?.();
+        }, autoDismissDelay);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [visible]);
+  
+  return (
+    <M3Dialog
+      visible={visible}
+      onDismiss={onDismiss}
+      showCloseButton={false}
+      actions={autoDismiss ? [] : [{
+        label: 'Done',
+        onPress: onDismiss,
+        variant: 'primary',
+      }]}
+    >
+      <View style={{ alignItems: 'center', paddingVertical: 8 }}>
+        {/* Success Icon with Animation */}
+        <Animated.View style={{
+          transform: [{ scale: scaleAnim }],
+          marginBottom: 16,
+        }}>
+          <View style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: colors.successLight || `${colors.success}15`,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <LucideCheckCircle size={48} color={colors.success} strokeWidth={2.5} />
+          </View>
+        </Animated.View>
+        
+        {/* Title */}
+        <Text style={{ 
+          fontSize: 24, 
+          fontWeight: '700', 
+          color: colors.onSurface,
+          marginBottom: 4,
+        }}>
+          Trip Logged! 🎉
+        </Text>
+        
+        {/* Trip Type Badge */}
+        <View style={{
+          backgroundColor: tripType === 'Going' ? `${colors.primary}15` : `${colors.secondary}15`,
+          paddingHorizontal: 16,
+          paddingVertical: 6,
+          borderRadius: 20,
+          marginBottom: 20,
+        }}>
+          <Text style={{
+            fontSize: 14,
+            fontWeight: '600',
+            color: tripType === 'Going' ? colors.primary : colors.secondary,
+          }}>
+            {tripType} Trip • Scan #{scanNumber}
+          </Text>
+        </View>
+        
+        {/* Fare Details Card */}
+        <View style={{
+          width: '100%',
+          backgroundColor: colors.surfaceVariant || `${colors.primary}08`,
+          borderRadius: borderRadius?.lg || 16,
+          padding: 16,
+          marginBottom: 8,
+        }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <LucideCar size={18} color={colors.primary} />
+              <Text style={{ marginLeft: 8, fontSize: 14, color: colors.onSurfaceVariant }}>This Scan</Text>
+            </View>
+            <Animated.Text style={{ 
+              fontSize: 20, 
+              fontWeight: '700', 
+              color: colors.primary,
+              transform: [{ translateY: bounceAnim }],
+            }}>
+              ₹{fareAmount}
+            </Animated.Text>
+          </View>
+          
+          <View style={{ height: 1, backgroundColor: colors.outline, opacity: 0.2, marginVertical: 8 }} />
+          
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <LucideWallet size={18} color={colors.success} />
+              <Text style={{ marginLeft: 8, fontSize: 14, color: colors.onSurfaceVariant }}>Today's Total</Text>
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.success }}>
+              ₹{todayTotal}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </M3Dialog>
+  );
+};
+
+/**
+ * Already Logged Dialog
+ */
+export const M3AlreadyLoggedDialog = ({
+  visible,
+  onDismiss,
+}) => {
+  const { colors } = useTheme();
+  
+  return (
+    <M3Dialog
+      visible={visible}
+      onDismiss={onDismiss}
+      title="Already Logged"
+      message="This trip has already been recorded for today."
+      icon={<LucideInfo />}
+      iconColor={colors.tertiary || colors.secondary}
+      iconBackgroundColor={`${colors.tertiary || colors.secondary}15`}
+      showCloseButton
+      actions={[{
+        label: 'OK',
+        onPress: onDismiss,
+        variant: 'primary',
+      }]}
+    />
+  );
+};
 
 export default M3Dialog;

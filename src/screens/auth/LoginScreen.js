@@ -9,7 +9,6 @@ import {
   Platform,
   ScrollView,
   Switch,
-  Alert,
   Animated,
 } from 'react-native';
 import { LucideCarFront, LucideMail, LucideLock } from 'lucide-react-native';
@@ -23,7 +22,15 @@ import {
   clearRememberedEmail,
   isRememberMeEnabled,
 } from '../../utils/storage';
-import { M3TextField, M3Button, ButtonVariant, M3LoadingDialog } from '../../components/common';
+import { 
+  M3TextField, 
+  M3Button, 
+  ButtonVariant, 
+  M3LoadingDialog,
+  M3AccountNotFoundDialog,
+  M3IncorrectPasswordDialog,
+  M3ErrorDialog,
+} from '../../components/common';
 
 export default function LoginScreen({ navigation }) {
   const { signIn } = useAuth();
@@ -42,6 +49,11 @@ export default function LoginScreen({ navigation }) {
   // State
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  
+  // Dialog states
+  const [accountNotFoundDialog, setAccountNotFoundDialog] = useState(false);
+  const [incorrectPasswordDialog, setIncorrectPasswordDialog] = useState(false);
+  const [errorDialog, setErrorDialog] = useState({ visible: false, title: '', message: '' });
 
   // Load remembered email on mount
   useEffect(() => {
@@ -134,52 +146,27 @@ export default function LoginScreen({ navigation }) {
             .single();
 
           if (!existingUser) {
-            // No account found - prompt to sign up
-            Alert.alert(
-              'Account Not Found',
-              'No account exists with this email address. Would you like to create one?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { 
-                  text: 'Sign Up', 
-                  onPress: () => navigation.navigate('Register'),
-                  style: 'default',
-                },
-              ],
-              { cancelable: true }
-            );
+            // No account found - show enhanced dialog
+            setAccountNotFoundDialog(true);
           } else {
-            // Account exists but wrong password
-            Alert.alert(
-              'Incorrect Password',
-              'The password you entered is incorrect. Please try again or reset your password.',
-              [
-                { text: 'Try Again', style: 'cancel' },
-                { 
-                  text: 'Forgot Password?', 
-                  onPress: () => navigation.navigate('ForgotPassword'),
-                },
-              ],
-              { cancelable: true }
-            );
+            // Account exists but wrong password - show enhanced dialog
+            setIncorrectPasswordDialog(true);
           }
         } catch (checkError) {
           // DB check failed, show generic error
-          Alert.alert(
-            'Login Failed',
-            errorMsg,
-            [{ text: 'OK' }],
-            { cancelable: true }
-          );
+          setErrorDialog({
+            visible: true,
+            title: 'Login Failed',
+            message: errorMsg,
+          });
         }
       } else {
         // Other errors (network, rate limit, etc.)
-        Alert.alert(
-          'Login Failed',
-          errorMsg,
-          [{ text: 'OK' }],
-          { cancelable: true }
-        );
+        setErrorDialog({
+          visible: true,
+          title: 'Login Failed',
+          message: errorMsg,
+        });
       }
     } finally {
       setLoading(false);
@@ -312,6 +299,29 @@ export default function LoginScreen({ navigation }) {
 
       {/* Loading Dialog */}
       <M3LoadingDialog visible={loading} message="Signing in..." />
+      
+      {/* Account Not Found Dialog */}
+      <M3AccountNotFoundDialog
+        visible={accountNotFoundDialog}
+        onDismiss={() => setAccountNotFoundDialog(false)}
+        onSignUp={() => navigation.navigate('Register')}
+        email={email}
+      />
+      
+      {/* Incorrect Password Dialog */}
+      <M3IncorrectPasswordDialog
+        visible={incorrectPasswordDialog}
+        onDismiss={() => setIncorrectPasswordDialog(false)}
+        onForgotPassword={() => navigation.navigate('ForgotPassword')}
+      />
+      
+      {/* Generic Error Dialog */}
+      <M3ErrorDialog
+        visible={errorDialog.visible}
+        onDismiss={() => setErrorDialog({ visible: false, title: '', message: '' })}
+        title={errorDialog.title}
+        message={errorDialog.message}
+      />
     </KeyboardAvoidingView>
   );
 }

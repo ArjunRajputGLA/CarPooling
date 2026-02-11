@@ -35,7 +35,11 @@ export {
   M3SuccessDialog, 
   M3InfoDialog, 
   M3WarningDialog,
-  M3LoadingDialog, 
+  M3LoadingDialog,
+  M3AccountNotFoundDialog,
+  M3IncorrectPasswordDialog,
+  M3TripSuccessDialog,
+  M3AlreadyLoggedDialog,
   DialogType 
 } from './M3Dialog';
 

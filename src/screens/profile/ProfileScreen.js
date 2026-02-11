@@ -733,7 +733,7 @@ export default function ProfileScreen() {
           <InfoItem
             icon={<LucidePhone size={18} color={colors.onSurfaceVariant} />}
             label="Contact Phone"
-            value={data?.emergency_contact_phone ? `+91 ${data.emergency_contact_phone}` : 'Not set'}
+            value={data?.emergency_contact_phone || 'Not set'}
             onEdit={() => openEditModal('emergency_contact_phone', data?.emergency_contact_phone)}
             isLast
             colors={colors}
