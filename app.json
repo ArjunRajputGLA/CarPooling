@@ -23,7 +23,10 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.carpooling.app"
+      "package": "com.carpooling.app",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,6 +34,11 @@
     "plugins": [
       "expo-barcode-scanner",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bd34b595-60d7-460a-a21f-5c7c130c0939"
+      }
+    }
   }
 }

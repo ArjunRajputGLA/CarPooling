@@ -40,6 +40,7 @@ export {
   M3IncorrectPasswordDialog,
   M3TripSuccessDialog,
   M3AlreadyLoggedDialog,
+  M3RecentlyScanDialog,
   DialogType 
 } from './M3Dialog';
 

@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 import { 
     LucideCalendar, 
     LucideX, 
@@ -61,6 +62,9 @@ export default function HistoryScreen() {
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
     
+    // Subscription ref
+    const subscriptionRef = useRef(null);
+    
     useEffect(() => {
         Animated.timing(fadeAnim, {
             toValue: 1,
@@ -69,9 +73,37 @@ export default function HistoryScreen() {
         }).start();
     }, []);
 
+    // Real-time subscription for trip updates
     useEffect(() => {
-        fetchHistory();
-    }, [user, filterMonth, filterYear]);
+        if (!user?.id) return;
+
+        const channel = supabase
+            .channel('history-trips-realtime')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'trips',
+            }, () => {
+                // Refresh history when trips are updated
+                fetchHistory(true);
+            })
+            .subscribe();
+
+        subscriptionRef.current = channel;
+
+        return () => {
+            if (subscriptionRef.current) {
+                supabase.removeChannel(subscriptionRef.current);
+            }
+        };
+    }, [user?.id, filterMonth, filterYear]);
+
+    // Refresh on focus
+    useFocusEffect(
+        useCallback(() => {
+            fetchHistory();
+        }, [filterMonth, filterYear])
+    );
 
     useEffect(() => {
         applyFilters();
@@ -115,10 +147,10 @@ export default function HistoryScreen() {
             if (error) throw error;
             setTrips(data || []);
 
-            // Calculate totals
+            // Calculate totals properly
             const total = (data || []).reduce((sum, trip) => sum + (parseFloat(trip.fare_amount) || FARE_PER_TRIP), 0);
-            const paid = (data || []).filter(t => t.payment_status === 'paid').reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0);
-            const pending = total - paid;
+            const paid = (data || []).filter(t => t.payment_status === 'paid').reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
+            const pending = (data || []).filter(t => t.payment_status === 'pending').reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
             setTotalFare(total);
             setPaidFare(paid);
             setPendingFare(pending);

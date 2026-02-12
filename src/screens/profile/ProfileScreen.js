@@ -42,6 +42,10 @@ import { useTheme, ThemeMode } from '../../context/ThemeContext';
 import SwipeableScreen from '../../components/common/SwipeableScreen';
 import { uploadProfilePicture, deleteProfilePicture } from '../../utils/imageHelpers';
 import { clearAllData } from '../../utils/storage';
+
+// Default fare per trip constant
+const FARE_PER_TRIP = 31;
+
 import {
   ProfilePictureUpload,
   RoleBadge,
@@ -83,6 +87,7 @@ export default function ProfileScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
   
   // Settings
   const [pushNotifications, setPushNotifications] = useState(true);
@@ -143,7 +148,7 @@ export default function ProfileScreen() {
             .eq('car_id', carData.id);
           
           const totalTrips = trips?.length || 0;
-          const totalRevenue = trips?.reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0) || 0;
+          const totalRevenue = trips?.reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0) || 0;
           const paidTrips = trips?.filter(t => t.payment_status === 'paid').length || 0;
           
           // Get unique passengers
@@ -170,9 +175,9 @@ export default function ProfileScreen() {
         
         const totalTrips = trips?.length || 0;
         const totalPaid = trips?.filter(t => t.payment_status === 'paid')
-          .reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0) || 0;
+          .reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0) || 0;
         const pendingAmount = trips?.filter(t => t.payment_status === 'pending')
-          .reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0) || 0;
+          .reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0) || 0;
         
         setStats({
           totalTrips,
@@ -185,9 +190,43 @@ export default function ProfileScreen() {
     }
   };
 
+  // Ref for subscription cleanup
+  const subscriptionRef = useRef(null);
+
   useEffect(() => {
     fetchUserData();
   }, [user?.id]);
+
+  // Real-time subscription for trip updates
+  useEffect(() => {
+    if (!user?.id || !profile?.role) return;
+
+    // Subscribe to trip changes for real-time stats updates
+    const channel = supabase
+      .channel('profile-trips-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'trips',
+        filter: profile.role === 'passenger' 
+          ? `passenger_id=eq.${user.id}` 
+          : undefined,
+      }, () => {
+        // Refresh stats when any trip is updated
+        if (userData?.role || profile?.role) {
+          fetchStats(userData?.role || profile.role);
+        }
+      })
+      .subscribe();
+
+    subscriptionRef.current = channel;
+
+    return () => {
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+      }
+    };
+  }, [user?.id, profile?.role, userData?.role]);
 
   // Animation effect
   useEffect(() => {
@@ -380,17 +419,17 @@ export default function ProfileScreen() {
       return;
     }
     
-    setLoading(true);
+    setPasswordLoading(true);
     try {
       // Verify current password by attempting to sign in
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: userData.email,
+        email: userData?.email || profile?.email,
         password: currentPassword,
       });
       
       if (signInError) {
         setPasswordError('Current password is incorrect');
-        setLoading(false);
+        setPasswordLoading(false);
         return;
       }
       
@@ -401,16 +440,20 @@ export default function ProfileScreen() {
       
       if (updateError) throw updateError;
       
-      setPasswordModalVisible(false);
+      // Clear form and close modal immediately
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
-      showToastMessage('Password changed successfully!', 'success');
+      setPasswordError('');
+      setPasswordModalVisible(false);
+      setPasswordLoading(false);
+      
+      // Show success message
+      showToastMessage('Password changed successfully! Your new password is now active.', 'success');
     } catch (err) {
       console.error('Password change error:', err);
-      setPasswordError('Failed to change password. Please try again.');
-    } finally {
-      setLoading(false);
+      setPasswordError(err.message || 'Failed to change password. Please try again.');
+      setPasswordLoading(false);
     }
   };
 
@@ -1086,9 +1129,9 @@ export default function ProfileScreen() {
                   { backgroundColor: colors.primary, marginLeft: 12, opacity: pressed ? 0.8 : 1 }
                 ]}
                 onPress={handleChangePassword}
-                disabled={loading}
+                disabled={passwordLoading}
               >
-                {loading ? (
+                {passwordLoading ? (
                   <LoadingSpinner visible size="small" color={colors.onPrimary} />
                 ) : (
                   <Text style={[styles.modalButtonSaveText, { color: colors.onPrimary }]}>Change</Text>

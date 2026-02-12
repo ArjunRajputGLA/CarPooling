@@ -922,7 +922,7 @@ export const M3TripSuccessDialog = ({
 };
 
 /**
- * Already Logged Dialog
+ * Already Logged Dialog - for when max daily trips reached
  */
 export const M3AlreadyLoggedDialog = ({
   visible,
@@ -935,7 +935,36 @@ export const M3AlreadyLoggedDialog = ({
       visible={visible}
       onDismiss={onDismiss}
       title="Already Logged"
-      message="This trip has already been recorded for today."
+      message="You have already logged the maximum trips for this car today."
+      icon={<LucideInfo />}
+      iconColor={colors.tertiary || colors.secondary}
+      iconBackgroundColor={`${colors.tertiary || colors.secondary}15`}
+      showCloseButton
+      actions={[{
+        label: 'OK',
+        onPress: onDismiss,
+        variant: 'primary',
+      }]}
+    />
+  );
+};
+
+/**
+ * Recently Scanned Dialog - for when user scans too quickly
+ */
+export const M3RecentlyScanDialog = ({
+  visible,
+  onDismiss,
+  lastScanTime,
+}) => {
+  const { colors } = useTheme();
+  
+  return (
+    <M3Dialog
+      visible={visible}
+      onDismiss={onDismiss}
+      title="Recently Scanned"
+      message={`You scanned this car recently${lastScanTime ? ` at ${lastScanTime}` : ''}. Please wait a few minutes before scanning again to avoid duplicate trips.`}
       icon={<LucideInfo />}
       iconColor={colors.tertiary || colors.secondary}
       iconBackgroundColor={`${colors.tertiary || colors.secondary}15`}

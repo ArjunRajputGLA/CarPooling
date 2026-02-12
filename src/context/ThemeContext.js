@@ -18,6 +18,7 @@ export const ThemeMode = {
 // Storage keys
 const THEME_STORAGE_KEY = '@carpooling_theme_mode';
 const ACCENT_COLOR_KEY = '@carpooling_accent_color';
+const THEME_INITIALIZED_KEY = '@carpooling_theme_initialized';
 
 // Create theme context
 const ThemeContext = createContext(null);
@@ -974,7 +975,7 @@ const DEFAULT_ACCENT = 'blue';
 // ============================================================================
 export const ThemeProvider = ({ children }) => {
   const systemColorScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState(ThemeMode.SYSTEM);
+  const [themeMode, setThemeMode] = useState(ThemeMode.DARK);
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -982,12 +983,23 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     const loadPreferences = async () => {
       try {
-        const [savedTheme, savedAccent] = await Promise.all([
+        const [savedTheme, savedAccent, isInitialized] = await Promise.all([
           AsyncStorage.getItem(THEME_STORAGE_KEY),
           AsyncStorage.getItem(ACCENT_COLOR_KEY),
+          AsyncStorage.getItem(THEME_INITIALIZED_KEY),
         ]);
         
-        if (savedTheme) setThemeMode(savedTheme);
+        // If this is the first launch, default to dark theme and mark as initialized
+        if (!isInitialized) {
+          await Promise.all([
+            AsyncStorage.setItem(THEME_STORAGE_KEY, ThemeMode.DARK),
+            AsyncStorage.setItem(THEME_INITIALIZED_KEY, 'true'),
+          ]);
+          setThemeMode(ThemeMode.DARK);
+        } else if (savedTheme) {
+          setThemeMode(savedTheme);
+        }
+        
         if (savedAccent && AccentColors[savedAccent]) setAccentColor(savedAccent);
       } catch (error) {
         console.error('Error loading theme preferences:', error);

@@ -653,43 +653,41 @@ export default function DriverDashboard() {
         setModalVisible(true);
     };
 
-    const PassengerSummaryCard = ({ item }) => (
-        <Pressable 
-            style={({ pressed }) => [
-                styles.passengerCard,
-                {
-                    backgroundColor: colors.surfaceContainerLow,
-                    borderRadius: borderRadius.large,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
-                }
-            ]}
-            onPress={() => openPassengerDetail(item)}
-        >
-            <View style={styles.passengerCardHeader}>
-                <View style={[styles.passengerCardAvatar, { backgroundColor: colors.primaryContainer }]}>
-                    <Text style={[styles.passengerCardInitial, { color: colors.onPrimaryContainer }]}>
-                        {item.name.charAt(0).toUpperCase()}
-                    </Text>
+    const PassengerSummaryCard = ({ item }) => {
+        const totalContribution = (item.paidAmount || 0) + (item.pendingAmount || 0);
+        
+        return (
+            <Pressable 
+                style={({ pressed }) => [
+                    styles.passengerCard,
+                    {
+                        backgroundColor: colors.surfaceContainerLow,
+                        borderRadius: borderRadius.large,
+                        transform: [{ scale: pressed ? 0.98 : 1 }],
+                    }
+                ]}
+                onPress={() => openPassengerDetail(item)}
+            >
+                <View style={styles.passengerCardHeader}>
+                    <View style={[styles.passengerCardAvatar, { backgroundColor: colors.primaryContainer }]}>
+                        <Text style={[styles.passengerCardInitial, { color: colors.onPrimaryContainer }]}>
+                            {item.name.charAt(0).toUpperCase()}
+                        </Text>
+                    </View>
+                    <View style={styles.passengerCardInfo}>
+                        <Text style={[styles.passengerCardName, { color: colors.onSurface }]}>{item.name}</Text>
+                        <Text style={[styles.passengerCardMeta, { color: colors.onSurfaceVariant }]}>
+                            {item.trips} trips · {item.daysActive} days
+                        </Text>
+                    </View>
+                    <View style={styles.passengerCardAmount}>
+                        <Text style={[styles.pendingAmountLabel, { color: colors.onSurfaceVariant }]}>Contribution</Text>
+                        <Text style={[styles.pendingAmountValue, { color: colors.primary }]}>₹{totalContribution}</Text>
+                    </View>
                 </View>
-                <View style={styles.passengerCardInfo}>
-                    <Text style={[styles.passengerCardName, { color: colors.onSurface }]}>{item.name}</Text>
-                    <Text style={[styles.passengerCardMeta, { color: colors.onSurfaceVariant }]}>
-                        {item.trips} trips · {item.daysActive} days
-                    </Text>
-                </View>
-                <View style={styles.passengerCardAmount}>
-                    {item.pendingAmount > 0 ? (
-                        <>
-                            <Text style={[styles.pendingAmountLabel, { color: colors.tertiary }]}>Pending</Text>
-                            <Text style={[styles.pendingAmountValue, { color: colors.tertiary }]}>₹{item.pendingAmount}</Text>
-                        </>
-                    ) : (
-                        <LucideCheckCircle size={20} color={colors.primary} />
-                    )}
-                </View>
-            </View>
-        </Pressable>
-    );
+            </Pressable>
+        );
+    };
 
     const PassengerDetailModal = () => (
         <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>

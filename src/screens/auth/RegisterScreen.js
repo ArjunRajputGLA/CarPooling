@@ -437,7 +437,6 @@ export default function RegisterScreen({ navigation }) {
 
           {/* Phone Number */}
           <PhoneInput
-            label="Phone Number"
             value={phone}
             onChangeText={setPhone}
             countryCode={countryCode}
@@ -494,7 +493,6 @@ export default function RegisterScreen({ navigation }) {
 
           {/* Emergency Contact Phone */}
           <PhoneInput
-            label="Emergency Contact Phone"
             value={emergencyContactPhone}
             onChangeText={setEmergencyContactPhone}
             countryCode={emergencyCountryCode}
@@ -502,6 +500,7 @@ export default function RegisterScreen({ navigation }) {
             error={touched.emergencyContactPhone && errors.emergencyContactPhone}
             isValid={emergencyContactPhone && validatePhone(emergencyContactPhone)}
             onBlur={() => handleBlur('emergencyContactPhone')}
+            isEmergencyContact={true}
           />
 
           {/* Home Address */}

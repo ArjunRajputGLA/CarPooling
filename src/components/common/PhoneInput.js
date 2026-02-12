@@ -24,25 +24,27 @@ const PhoneInput = ({
   error,
   isValid,
   required = false,
-  placeholder = 'Phone Number',
+  placeholder = 'Enter 10-digit mobile number',
   style,
+  isEmergencyContact = false,
 }) => {
   const { colors, spacing, borderRadius, typography } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
-  const labelAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const clearButtonAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
   const modalSlideAnim = useRef(new Animated.Value(300)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
   const selectedCountry = COUNTRY_CODES.find(c => c.code === countryCode) || COUNTRY_CODES[0];
 
+  // Animate clear button visibility based on value
   useEffect(() => {
-    Animated.timing(labelAnim, {
-      toValue: isFocused || value ? 1 : 0,
+    Animated.timing(clearButtonAnim, {
+      toValue: value && value.length > 0 ? 1 : 0,
       duration: 150,
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start();
-  }, [isFocused, value]);
+  }, [value]);
 
   const openModal = () => {
     setShowCountryPicker(true);
@@ -101,15 +103,18 @@ const PhoneInput = ({
     return colors.onSurfaceVariant;
   };
 
-  const labelTop = labelAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [16, -8],
-  });
+  // Clear button handler
+  const handleClear = () => {
+    onChangeText('');
+  };
 
-  const labelFontSize = labelAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [16, 12],
-  });
+  // Get the appropriate placeholder text
+  const getPlaceholderText = () => {
+    if (isEmergencyContact) {
+      return 'Enter emergency contact number';
+    }
+    return placeholder || 'Enter 10-digit mobile number';
+  };
 
   const renderCountryItem = ({ item }) => (
     <Pressable
@@ -165,30 +170,10 @@ const PhoneInput = ({
         {
           borderWidth: isFocused ? 2 : 1,
           borderColor: getBorderColor(),
-          borderRadius: borderRadius.textField,
+          borderRadius: borderRadius.input || borderRadius.medium,
           backgroundColor: 'transparent',
         },
       ]}>
-        {/* Floating Label */}
-        {label && (
-          <Animated.Text
-            style={[
-              styles.floatingLabel,
-              {
-                color: getLabelColor(),
-                top: labelTop,
-                fontSize: labelFontSize,
-                backgroundColor: isFocused || value ? colors.surface : 'transparent',
-                paddingHorizontal: isFocused || value ? 4 : 0,
-                left: 12,
-              },
-            ]}
-            pointerEvents="none"
-          >
-            {label}{required && <Text style={{ color: colors.error }}> *</Text>}
-          </Animated.Text>
-        )}
-        
         {/* Country Code Selector */}
         <TouchableOpacity
           style={[
@@ -228,7 +213,7 @@ const PhoneInput = ({
           ]}
           value={formatPhoneDisplay(value)}
           onChangeText={handlePhoneChange}
-          placeholder={isFocused && !value ? placeholder : ''}
+          placeholder={getPlaceholderText()}
           placeholderTextColor={colors.onSurfaceVariant}
           keyboardType="phone-pad"
           maxLength={11}
@@ -236,10 +221,33 @@ const PhoneInput = ({
           onBlur={() => setIsFocused(false)}
         />
 
-        {/* Validation Icon */}
-        {value && (
+        {/* Clear Button with Fade Animation - only shows when there's text */}
+        <Animated.View 
+          style={[
+            styles.clearButton, 
+            { 
+              opacity: clearButtonAnim,
+              transform: [{ scale: clearButtonAnim }],
+            }
+          ]}
+          pointerEvents={value && value.length > 0 ? 'auto' : 'none'}
+        >
+          <TouchableOpacity
+            onPress={handleClear}
+            style={[styles.clearButtonTouchable, { marginRight: spacing.sm }]}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <View style={[styles.clearIconContainer, { backgroundColor: colors.surfaceContainerHighest }]}>
+              <LucideX size={14} color={colors.onSurfaceVariant} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Validation Icon - only show when phone number is complete (10 digits) */}
+        {value && value.length === 10 && (
           <View style={[styles.validationIcon, { paddingRight: spacing.md }]}>
-            {isValid ? (
+            {/* Check internal validation: 10 digits starting with 6-9 */}
+            {/^[6-9]\d{9}$/.test(value) ? (
               <View style={[styles.iconContainer, { backgroundColor: colors.primaryContainer }]}>
                 <LucideCheck size={16} color={colors.primary} />
               </View>
@@ -334,10 +342,6 @@ const styles = StyleSheet.create({
     minHeight: 56,
     position: 'relative',
   },
-  floatingLabel: {
-    position: 'absolute',
-    zIndex: 1,
-  },
   countrySelector: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -355,6 +359,20 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     paddingVertical: 16,
+  },
+  clearButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearButtonTouchable: {
+    padding: 4,
+  },
+  clearIconContainer: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   validationIcon: {},
   iconContainer: {

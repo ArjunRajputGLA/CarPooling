@@ -150,15 +150,15 @@ export default function PassengerDashboard() {
         });
     };
 
-    // Calculate stats
+    // Calculate stats with proper fare handling
     const todayTripCount = todayTrips.length;
     const todayTotal = todayTrips.reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
-    const todayPaid = todayTrips.filter(t => t.payment_status === 'paid').reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0);
+    const todayPaid = todayTrips.filter(t => t.payment_status === 'paid').reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
     
     const weekTripCount = weekTrips.length;
     const weekPending = weekTrips.filter(t => t.payment_status === 'pending').reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
-    const weekPaid = weekTrips.filter(t => t.payment_status === 'paid').reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0);
-    const weekTotal = weekPending + weekPaid;
+    const weekPaid = weekTrips.filter(t => t.payment_status === 'paid').reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
+    const weekTotal = weekTrips.reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
 
     // Get weekday activity
     const weekdays = getWeekdays();

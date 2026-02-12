@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 import { LucideCamera, LucideImage, LucideScanLine, LucideRefreshCw, LucideCameraOff } from 'lucide-react-native';
 import { getTodayRange, getTodayString, verifyQRHash, formatTime } from '../utils/dateHelpers';
 import SwipeableScreen from '../components/common/SwipeableScreen';
-import { M3TripSuccessDialog, M3AlreadyLoggedDialog, M3ErrorDialog } from '../components/common';
+import { M3TripSuccessDialog, M3AlreadyLoggedDialog, M3RecentlyScanDialog, M3ErrorDialog } from '../components/common';
 
 const FARE_PER_TRIP = 31; // Fixed fare per scan from fare_settings
 
@@ -32,6 +32,7 @@ export default function ScanScreen({ navigation }) {
         todayTotal: FARE_PER_TRIP 
     });
     const [alreadyLoggedDialog, setAlreadyLoggedDialog] = useState(false);
+    const [recentlyScanDialog, setRecentlyScanDialog] = useState({ visible: false, lastScanTime: '' });
     const [errorDialog, setErrorDialog] = useState({ visible: false, message: '' });
     const pulseAnim = useRef(new Animated.Value(1)).current;
     
@@ -233,7 +234,7 @@ export default function ScanScreen({ navigation }) {
 
             if (!recentError && recentTrips && recentTrips.length > 0) {
                 const lastScanTime = formatTime(recentTrips[0].scan_timestamp);
-                setAlreadyLoggedDialog(true);
+                setRecentlyScanDialog({ visible: true, lastScanTime });
                 setLoading(false);
                 return;
             }
@@ -474,6 +475,15 @@ export default function ScanScreen({ navigation }) {
                 visible={alreadyLoggedDialog}
                 onDismiss={() => {
                     setAlreadyLoggedDialog(false);
+                    setScanned(false);
+                }}
+            />
+
+            <M3RecentlyScanDialog
+                visible={recentlyScanDialog.visible}
+                lastScanTime={recentlyScanDialog.lastScanTime}
+                onDismiss={() => {
+                    setRecentlyScanDialog({ visible: false, lastScanTime: '' });
                     setScanned(false);
                 }}
             />

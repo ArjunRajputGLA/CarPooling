@@ -11,10 +11,13 @@ import {
   ActivityIndicator,
   Animated,
   Pressable,
+  Dimensions,
 } from 'react-native';
-import { LucideCamera, LucideImage, LucideTrash2, LucideX, LucideUser, LucidePencil } from 'lucide-react-native';
+import { LucideCamera, LucideImage, LucideTrash2, LucideX, LucideUser, LucidePencil, LucideCheck } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const ProfilePictureUpload = ({
   imageUri,
@@ -26,9 +29,12 @@ const ProfilePictureUpload = ({
 }) => {
   const { colors, spacing, borderRadius, typography } = useTheme();
   const [showOptions, setShowOptions] = React.useState(false);
+  const [showPreview, setShowPreview] = React.useState(false);
+  const [previewImage, setPreviewImage] = React.useState(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const modalSlideAnim = useRef(new Animated.Value(300)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
+  const previewBackdropAnim = useRef(new Animated.Value(0)).current;
 
   const animatePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -76,6 +82,38 @@ const ProfilePictureUpload = ({
     ]).start(() => setShowOptions(false));
   };
 
+  const openPreview = (uri) => {
+    setPreviewImage(uri);
+    setShowPreview(true);
+    Animated.timing(previewBackdropAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closePreview = () => {
+    Animated.timing(previewBackdropAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowPreview(false);
+      setPreviewImage(null);
+    });
+  };
+
+  const handleDone = () => {
+    if (previewImage) {
+      onImageSelected(previewImage);
+    }
+    closePreview();
+  };
+
+  const handleCancel = () => {
+    closePreview();
+  };
+
   const requestPermissions = async (type) => {
     if (type === 'camera') {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -107,7 +145,7 @@ const ProfilePictureUpload = ({
     });
 
     if (!result.canceled && result.assets[0]) {
-      onImageSelected(result.assets[0].uri);
+      openPreview(result.assets[0].uri);
     }
   };
 
@@ -125,7 +163,7 @@ const ProfilePictureUpload = ({
     });
 
     if (!result.canceled && result.assets[0]) {
-      onImageSelected(result.assets[0].uri);
+      openPreview(result.assets[0].uri);
     }
   };
 
@@ -317,6 +355,65 @@ const ProfilePictureUpload = ({
           </Animated.View>
         </View>
       </Modal>
+
+      {/* Image Preview Modal with Done/Cancel buttons */}
+      <Modal
+        visible={showPreview}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancel}
+      >
+        <Animated.View 
+          style={[
+            styles.previewContainer,
+            { 
+              backgroundColor: 'rgba(0, 0, 0, 0.95)',
+              opacity: previewBackdropAnim,
+            }
+          ]}
+        >
+          {/* Cancel Button - Bottom Left */}
+          <Pressable
+            style={[
+              styles.previewButton,
+              styles.cancelButton,
+              { backgroundColor: colors.surfaceContainerHighest }
+            ]}
+            onPress={handleCancel}
+          >
+            <LucideX size={20} color={colors.onSurface} />
+            <Text style={[styles.previewButtonText, { color: colors.onSurface, marginLeft: 8 }]}>
+              Cancel
+            </Text>
+          </Pressable>
+
+          {/* Preview Image */}
+          <View style={styles.previewImageContainer}>
+            {previewImage && (
+              <Image
+                source={{ uri: previewImage }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+
+          {/* Done Button - Bottom Right */}
+          <Pressable
+            style={[
+              styles.previewButton,
+              styles.doneButton,
+              { backgroundColor: colors.primary }
+            ]}
+            onPress={handleDone}
+          >
+            <LucideCheck size={20} color={colors.onPrimary} />
+            <Text style={[styles.previewButtonText, { color: colors.onPrimary, marginLeft: 8 }]}>
+              Done
+            </Text>
+          </Pressable>
+        </Animated.View>
+      </Modal>
     </View>
   );
 };
@@ -392,6 +489,43 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontWeight: '500',
+  },
+  previewContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewImageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingVertical: 100,
+  },
+  previewImage: {
+    width: SCREEN_WIDTH - 40,
+    height: SCREEN_WIDTH - 40,
+    borderRadius: (SCREEN_WIDTH - 40) / 2,
+  },
+  previewButton: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    bottom: 50,
+  },
+  cancelButton: {
+    left: 20,
+  },
+  doneButton: {
+    right: 20,
+  },
+  previewButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
