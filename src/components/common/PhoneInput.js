@@ -24,7 +24,7 @@ const PhoneInput = ({
   error,
   isValid,
   required = false,
-  placeholder = 'Enter 10-digit mobile number',
+  placeholder = 'Enter 10-digit mobile',
   style,
   isEmergencyContact = false,
 }) => {

@@ -228,8 +228,7 @@ export default function LoginScreen({ navigation }) {
               setEmail(text);
               if (errors.email) setErrors({ ...errors, email: null });
             }}
-            placeholder="Enter your email"
-            error={!!errors.email}
+            placeholder=" Enter your email"            placeholderTextColor={isDark ? '#FFFFFF' : colors.inputPlaceholder}            error={!!errors.email}
             errorMessage={errors.email}
             keyboardType="email-address"
             autoCapitalize="none"
@@ -246,8 +245,7 @@ export default function LoginScreen({ navigation }) {
               setPassword(text);
               if (errors.password) setErrors({ ...errors, password: null });
             }}
-            placeholder="Enter your password"
-            error={!!errors.password}
+            placeholder=" Enter your password"            placeholderTextColor={isDark ? '#FFFFFF' : colors.inputPlaceholder}            error={!!errors.password}
             errorMessage={errors.password}
             secureTextEntry
             leadingIcon={<LucideLock />}

@@ -87,6 +87,7 @@ export const AuthProvider = ({ children }) => {
     const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
     const appState = useRef(AppState.currentState);
     const activityTimerRef = useRef(null);
+    const isChangingPasswordRef = useRef(false);
 
     // Track user activity - call this from screens on interaction
     const updateLastActivity = useCallback(async () => {
@@ -228,6 +229,12 @@ export const AuthProvider = ({ children }) => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
                 console.log('Auth state change:', event);
+
+                // CRITICAL: Block all auth state handling if password change is in progress
+                if (isChangingPasswordRef.current) {
+                    console.log('Blocking auth state update during password change sequence');
+                    return;
+                }
                 
                 // Handle password recovery flow
                 if (event === 'PASSWORD_RECOVERY') {
@@ -249,8 +256,16 @@ export const AuthProvider = ({ children }) => {
                 setUser(session?.user || null);
                 
                 if (session?.user) {
-                    // Fetch profile when session changes
-                    await fetchProfile(session.user.id, session.user);
+                    // Only fetch profile on specific events to prevent infinite loops (e.g. during password update)
+                    // We definitely want to fetch on SIGNED_IN and INITIAL_SESSION
+                    // We avoid fetching on USER_UPDATED (password change) and TOKEN_REFRESHED unless profile is missing
+                    if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || !profile) {
+                         // Fetch profile when session changes
+                         await fetchProfile(session.user.id, session.user);
+                    } else {
+                        // For other events, just ensure we're not stuck in loading
+                        if (loading) setLoading(false);
+                    }
                 } else {
                     setProfile(null);
                     setLoading(false);
@@ -736,6 +751,7 @@ export const AuthProvider = ({ children }) => {
         
         // Session management
         updateLastActivity,
+        setIsChangingPassword: (val) => { isChangingPasswordRef.current = val; },
         
         // Utility methods
         checkEmailExists,

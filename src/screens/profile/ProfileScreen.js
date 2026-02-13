@@ -56,12 +56,13 @@ import {
   M3ConfirmDialog,
   M3Button,
   M3TextField,
+  M3LoadingDialog,
 } from '../../components/common';
 import M3Dialog from '../../components/common/M3Dialog';
 import { validateName, validatePhone, validateAddress } from '../../utils/validation';
 
 export default function ProfileScreen() {
-  const { profile, signOut, user, refreshProfile } = useAuth();
+  const { profile, signOut, user, refreshProfile, setIsChangingPassword } = useAuth();
   const { colors, spacing, borderRadius, isDark, themeMode, updateThemeMode } = useTheme();
   
   // Animation refs
@@ -419,41 +420,70 @@ export default function ProfileScreen() {
       return;
     }
     
+    // Set flag to prevent auth listener interference
+    if (setIsChangingPassword) setIsChangingPassword(true);
     setPasswordLoading(true);
+    
+    // Safety timeout - 10 seconds
+    const timeoutId = setTimeout(() => {
+      setPasswordLoading((loading) => {
+        if (loading) {
+          if (setIsChangingPassword) setIsChangingPassword(false);
+          setPasswordError('Request timed out. Please try again.');
+          return false;
+        }
+        return false;
+      });
+    }, 10000);
+
     try {
-      // Verify current password by attempting to sign in
+      // 1. Verify current password
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: userData?.email || profile?.email,
         password: currentPassword,
       });
       
       if (signInError) {
+        clearTimeout(timeoutId);
         setPasswordError('Current password is incorrect');
         setPasswordLoading(false);
+        if (setIsChangingPassword) setIsChangingPassword(false);
         return;
       }
       
-      // Update password
+      // 2. Update password
       const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword,
       });
       
+      clearTimeout(timeoutId);
+
       if (updateError) throw updateError;
       
-      // Clear form and close modal immediately
+      // 3. Success handling - Immediate
+      setPasswordLoading(false);
+      setPasswordModalVisible(false);
+      
+      // Clear form
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
       setPasswordError('');
-      setPasswordModalVisible(false);
-      setPasswordLoading(false);
       
-      // Show success message
-      showToastMessage('Password changed successfully! Your new password is now active.', 'success');
+      // Show success
+      showToastMessage('Password changed successfully', 'success');
+      
+      // Reset flag after a delay to ensure any pending auth events from the update are ignored
+      setTimeout(() => {
+        if (setIsChangingPassword) setIsChangingPassword(false);
+      }, 2000);
+      
     } catch (err) {
+      clearTimeout(timeoutId);
       console.error('Password change error:', err);
       setPasswordError(err.message || 'Failed to change password. Please try again.');
       setPasswordLoading(false);
+      if (setIsChangingPassword) setIsChangingPassword(false);
     }
   };
 
@@ -894,7 +924,7 @@ export default function ProfileScreen() {
               <StatItem
                 icon={<LucideCreditCard size={18} color={colors.secondary} />}
                 label="Total Revenue"
-                value={`₹${stats?.totalRevenue?.toFixed(2) || '0.00'}`}
+                value={`₹${Math.round(stats?.totalRevenue || 0)}`}
                 colors={colors}
               />
               <StatItem
@@ -917,13 +947,13 @@ export default function ProfileScreen() {
               <StatItem
                 icon={<LucideCreditCard size={18} color={colors.secondary} />}
                 label="Total Paid"
-                value={`₹${stats?.totalPaid?.toFixed(2) || '0.00'}`}
+                value={`₹${Math.round(stats?.totalPaid || 0)}`}
                 colors={colors}
               />
               <StatItem
                 icon={<LucideAlertCircle size={18} color={colors.tertiary} />}
                 label="Pending Payments"
-                value={`₹${stats?.pendingAmount?.toFixed(2) || '0.00'}`}
+                value={`₹${Math.round(stats?.pendingAmount || 0)}`}
                 isLast
                 colors={colors}
               />
@@ -1141,6 +1171,9 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* M3 Loading Dialog for Password Change */}
+      <M3LoadingDialog visible={passwordLoading} message="Changing password..." />
 
       {/* Toast */}
       <Toast

@@ -13,6 +13,7 @@ import {
     TextInput,
     Alert,
     Animated,
+    Vibration,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -37,6 +38,7 @@ import {
 } from 'lucide-react-native';
 import { getMonthRange, formatDate, formatTime, formatDateTime } from '../utils/dateHelpers';
 import SwipeableScreen from '../components/common/SwipeableScreen';
+import { Toast } from '../components/common';
 
 const FARE_PER_TRIP = 31;
 
@@ -58,6 +60,9 @@ export default function HistoryScreen() {
     // Modal state
     const [selectedTrip, setSelectedTrip] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
+    
+    // Toast state
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
     
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -225,9 +230,10 @@ export default function HistoryScreen() {
     };
 
     const deleteTrip = (tripId) => {
+        Vibration.vibrate(50);
         Alert.alert(
-            'Delete Trip',
-            'Are you sure you want to delete this trip? This action cannot be undone.',
+            'Delete this trip?',
+            'This will permanently remove this trip record',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -242,6 +248,7 @@ export default function HistoryScreen() {
                             if (error) throw error;
                             setModalVisible(false);
                             setSelectedTrip(null);
+                            setToast({ visible: true, message: 'Trip deleted', type: 'success' });
                             fetchHistory(true);
                         } catch (e) {
                             Alert.alert('Error', 'Failed to delete trip: ' + e.message);
@@ -386,7 +393,7 @@ export default function HistoryScreen() {
                             styles.statusText,
                             { color: allPaid ? colors.primary : colors.tertiary }
                         ]}>
-                            {allPaid ? '✓ ALL PAID' : hasPending ? '◐ HAS PENDING' : ''}
+                            {allPaid ? (isDriver ? '✓ ALL RECEIVED' : '✓ ALL PAID') : hasPending ? '◐ HAS PENDING' : ''}
                         </Text>
                     </View>
                 </View>
@@ -430,6 +437,13 @@ export default function HistoryScreen() {
                                 { borderTopColor: colors.outlineVariant }
                             ]}
                             onPress={() => handleTripPress(trip)}
+                            onLongPress={() => {
+                                if (isDriver) {
+                                    Vibration.vibrate(50);
+                                    deleteTrip(trip.id);
+                                }
+                            }}
+                            delayLongPress={600}
                         >
                             <View style={styles.tripRowLeftHistory}>
                                 <View style={[
@@ -496,7 +510,13 @@ export default function HistoryScreen() {
                         </Pressable>
                     </View>
 
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
+                    <ScrollView 
+                        showsVerticalScrollIndicator={false} 
+                        contentContainerStyle={styles.modalScrollContent}
+                        bounces={true}
+                        nestedScrollEnabled={true}
+                        overScrollMode="always"
+                    >
                         {selectedTrip && (
                             <>
                                 {/* Passenger/Car Info */}
@@ -691,15 +711,15 @@ export default function HistoryScreen() {
             <View style={styles.summaryRow}>
                 <View style={[styles.summaryCard, { backgroundColor: colors.primary, borderRadius: borderRadius.large }]}>
                     <Text style={[styles.summaryLabel, { color: colors.onPrimary }]}>Total</Text>
-                    <Text style={[styles.summaryAmount, { color: colors.onPrimary }]}>₹{totalFare}</Text>
+                    <Text style={[styles.summaryAmount, { color: colors.onPrimary }]}>₹{Math.round(totalFare)}</Text>
                 </View>
                 <View style={[styles.summaryCard, { backgroundColor: colors.tertiary, borderRadius: borderRadius.large }]}>
-                    <Text style={[styles.summaryLabel, { color: colors.onTertiary }]}>Paid</Text>
-                    <Text style={[styles.summaryAmount, { color: colors.onTertiary }]}>₹{paidFare}</Text>
+                    <Text style={[styles.summaryLabel, { color: colors.onTertiary }]}>{profile?.role === 'driver' ? 'Received' : 'Paid'}</Text>
+                    <Text style={[styles.summaryAmount, { color: colors.onTertiary }]}>₹{Math.round(paidFare)}</Text>
                 </View>
                 <View style={[styles.summaryCard, { backgroundColor: colors.secondary, borderRadius: borderRadius.large }]}>
                     <Text style={[styles.summaryLabel, { color: colors.onSecondary }]}>Pending</Text>
-                    <Text style={[styles.summaryAmount, { color: colors.onSecondary }]}>₹{pendingFare}</Text>
+                    <Text style={[styles.summaryAmount, { color: colors.onSecondary }]}>₹{Math.round(pendingFare)}</Text>
                 </View>
             </View>
 
@@ -721,27 +741,33 @@ export default function HistoryScreen() {
                     )}
                 </View>
                 <View style={styles.filterRow}>
-                    {['all', 'pending', 'paid'].map(status => (
-                        <Pressable
-                            key={status}
-                            style={({ pressed }) => [
-                                styles.filterChip,
-                                { 
-                                    backgroundColor: statusFilter === status ? colors.primary : colors.surfaceContainerHighest,
-                                    borderRadius: borderRadius.full,
-                                    opacity: pressed ? 0.8 : 1,
-                                }
-                            ]}
-                            onPress={() => setStatusFilter(status)}
-                        >
-                            <Text style={[
-                                styles.filterChipText,
-                                { color: statusFilter === status ? colors.onPrimary : colors.onSurfaceVariant }
-                            ]}>
-                                {status.charAt(0).toUpperCase() + status.slice(1)}
-                            </Text>
-                        </Pressable>
-                    ))}
+                    {['all', 'pending', 'paid'].map(status => {
+                        let label = status.charAt(0).toUpperCase() + status.slice(1);
+                        if (status === 'paid' && profile?.role === 'driver') {
+                            label = 'Received';
+                        }
+                        return (
+                            <Pressable
+                                key={status}
+                                style={({ pressed }) => [
+                                    styles.filterChip,
+                                    { 
+                                        backgroundColor: statusFilter === status ? colors.primary : colors.surfaceContainerHighest,
+                                        borderRadius: borderRadius.full,
+                                        opacity: pressed ? 0.8 : 1,
+                                    }
+                                ]}
+                                onPress={() => setStatusFilter(status)}
+                            >
+                                <Text style={[
+                                    styles.filterChipText,
+                                    { color: statusFilter === status ? colors.onPrimary : colors.onSurfaceVariant }
+                                ]}>
+                                    {label}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
                 </View>
             </View>
 
@@ -786,6 +812,14 @@ export default function HistoryScreen() {
             )}
 
             <TripDetailModal />
+            
+            {/* Toast */}
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                onDismiss={() => setToast({ ...toast, visible: false })}
+            />
         </Animated.View>
         </SwipeableScreen>
     );
@@ -857,9 +891,9 @@ const styles = StyleSheet.create({
 
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { padding: 24, maxHeight: '85%' },
+    modalContent: { padding: 24, maxHeight: '85%', flex: 0 },
     modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-    modalScrollContent: { paddingBottom: 12 },
+    modalScrollContent: { paddingBottom: 24, flexGrow: 1 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
     modalTitle: { fontSize: 20, fontWeight: '700' },
     closeButton: { padding: 8 },

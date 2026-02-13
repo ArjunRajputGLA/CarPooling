@@ -411,8 +411,8 @@ export default function DriverDashboard() {
         const total = tripData.length;
         const paidTrips = tripData.filter(t => t.payment_status === 'paid');
         const pendingTrips = tripData.filter(t => t.payment_status === 'pending');
-        const paidRevenue = paidTrips.reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0);
-        const pendingRevenue = pendingTrips.reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0);
+        const paidRevenue = paidTrips.reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
+        const pendingRevenue = pendingTrips.reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
         
         setStats(prev => ({
             ...prev,
@@ -426,9 +426,9 @@ export default function DriverDashboard() {
 
     const calculateWeekStats = (data) => {
         const weekPending = data.filter(t => t.payment_status === 'pending')
-            .reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0);
+            .reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
         const weekPaid = data.filter(t => t.payment_status === 'paid')
-            .reduce((sum, t) => sum + (parseFloat(t.fare_amount) || 0), 0);
+            .reduce((sum, t) => sum + (parseFloat(t.fare_amount) || FARE_PER_TRIP), 0);
         
         setStats(prev => ({
             ...prev,
@@ -460,10 +460,10 @@ export default function DriverDashboard() {
             passengerMap[pid].dates.add(getDateFromTimestamp(trip.scan_timestamp));
             if (trip.payment_status === 'pending') {
                 passengerMap[pid].pending++;
-                passengerMap[pid].pendingAmount += (parseFloat(trip.fare_amount) || 0);
+                passengerMap[pid].pendingAmount += (parseFloat(trip.fare_amount) || FARE_PER_TRIP);
             } else {
                 passengerMap[pid].paid++;
-                passengerMap[pid].paidAmount += (parseFloat(trip.fare_amount) || 0);
+                passengerMap[pid].paidAmount += (parseFloat(trip.fare_amount) || FARE_PER_TRIP);
             }
         });
 
@@ -809,7 +809,7 @@ export default function DriverDashboard() {
                 <View style={[styles.statCard, { backgroundColor: colors.secondaryContainer, borderRadius: borderRadius.large }]}>
                     <LucideCheckCircle size={22} color={colors.secondary} />
                     <Text style={[styles.statNumber, { color: colors.onSecondaryContainer }]}>{stats.paid}</Text>
-                    <Text style={[styles.statLabel, { color: colors.onSecondaryContainer }]}>Paid</Text>
+                    <Text style={[styles.statLabel, { color: colors.onSecondaryContainer }]}>Received</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.tertiaryContainer, borderRadius: borderRadius.large }]}>
                     <LucideCircleDot size={22} color={colors.tertiary} />
@@ -825,8 +825,8 @@ export default function DriverDashboard() {
                         <LucideWallet size={24} color={colors.onPrimary} />
                     </View>
                     <View style={styles.revenueRight}>
-                        <Text style={[styles.revenueLabel, { color: colors.onPrimary + 'CC' }]}>Paid Today</Text>
-                        <Text style={[styles.revenueAmount, { color: colors.onPrimary }]}>₹{stats.paidRevenue.toFixed(0)}</Text>
+                        <Text style={[styles.revenueLabel, { color: colors.onPrimary + 'CC' }]}>Received Today</Text>
+                        <Text style={[styles.revenueAmount, { color: colors.onPrimary }]}>₹{stats.paidRevenue}</Text>
                     </View>
                 </View>
                 <View style={[styles.revenueCard, { backgroundColor: colors.tertiary, borderRadius: borderRadius.extraLarge }]}>
@@ -835,7 +835,7 @@ export default function DriverDashboard() {
                     </View>
                     <View style={styles.revenueRight}>
                         <Text style={[styles.revenueLabel, { color: colors.onTertiary + 'CC' }]}>Pending</Text>
-                        <Text style={[styles.revenueAmount, { color: colors.onTertiary }]}>₹{stats.pendingRevenue.toFixed(0)}</Text>
+                        <Text style={[styles.revenueAmount, { color: colors.onTertiary }]}>₹{stats.pendingRevenue}</Text>
                     </View>
                 </View>
             </View>
