@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.carpooling.app",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -38,7 +39,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow CarPooling to access your camera to scan QR codes."
+          "cameraPermission": "Allow ShareWheels to access your camera to scan QR codes."
         }
       ],
       "expo-web-browser"
