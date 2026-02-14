@@ -7,6 +7,14 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { View, Text, ActivityIndicator, StyleSheet, Animated, Pressable } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LucideHome, LucideQrCode, LucideUser, LucideScan, LucideHistory } from 'lucide-react-native';
+import { useEffect } from 'react';
+import { testPushToken } from './src/utils/pushTest';
+
+export default function App(){
+  useEffect(()=>{
+    testPushToken();
+  },[]);
+}
 
 // Auth Screens
 import { LoginScreen, RegisterScreen, ForgotPasswordScreen, ResetPasswordScreen } from './src/screens/auth';
