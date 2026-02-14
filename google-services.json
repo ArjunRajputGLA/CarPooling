@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "144046467889",
+    "project_id": "sharewheels-8a30d",
+    "storage_bucket": "sharewheels-8a30d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:144046467889:android:3f04471c236d930b105e10",
+        "android_client_info": {
+          "package_name": "com.carpooling.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQkLyy2ojsKkBzgRxmL0BMG-CaTJ18yBY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
