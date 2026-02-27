@@ -6,15 +6,11 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { View, Text, ActivityIndicator, StyleSheet, Animated, Pressable } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LucideHome, LucideQrCode, LucideUser, LucideScan, LucideHistory } from 'lucide-react-native';
+import { LucideHome, LucideQrCode, LucideUser, LucideScan, LucideHistory, LucideMapPin } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { testPushToken } from './src/utils/pushTest';
 
-export default function App(){
-  useEffect(()=>{
-    testPushToken();
-  },[]);
-}
+// Push token test is called inside the main App component below
 
 // Auth Screens
 import { LoginScreen, RegisterScreen, ForgotPasswordScreen, ResetPasswordScreen } from './src/screens/auth';
@@ -30,6 +26,7 @@ import PassengerDashboard from './src/screens/PassengerDashboard';
 import ScanScreen from './src/screens/ScanScreen';
 import QRCodeScreen from './src/screens/QRCodeScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
+import MapScreen from './src/screens/MapScreen';
 
 // Theme
 import { COLORS, TYPOGRAPHY, SPACING } from './src/constants/theme';
@@ -42,11 +39,11 @@ const M3TabBarButton = ({ children, onPress, accessibilityState }) => {
   const { colors, borderRadius, isDark } = useTheme();
   const focused = accessibilityState?.selected ?? false;
   const scale = React.useRef(new Animated.Value(1)).current;
-  
+
   // Vibrant purple for active state
   const activeColor = '#7C3AED';
   const activeBackground = 'rgba(124, 58, 237, 0.1)';
-  
+
   const handlePressIn = () => {
     Animated.spring(scale, {
       toValue: 0.95,
@@ -54,7 +51,7 @@ const M3TabBarButton = ({ children, onPress, accessibilityState }) => {
       friction: 8,
     }).start();
   };
-  
+
   const handlePressOut = () => {
     Animated.spring(scale, {
       toValue: 1,
@@ -62,7 +59,7 @@ const M3TabBarButton = ({ children, onPress, accessibilityState }) => {
       friction: 8,
     }).start();
   };
-  
+
   return (
     <Pressable
       onPress={onPress}
@@ -103,7 +100,7 @@ const M3TabBarButton = ({ children, onPress, accessibilityState }) => {
 const HomeScreen = () => {
   const { profile, loading } = useAuth();
   const { colors } = useTheme();
-  
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -111,7 +108,7 @@ const HomeScreen = () => {
       </View>
     );
   }
-  
+
   if (profile?.role === 'driver') return <DriverDashboard />;
   return <PassengerDashboard />;
 };
@@ -120,14 +117,14 @@ const HomeScreen = () => {
 function DriverTabs() {
   const { colors, typography, borderRadius, elevation, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  
+
   // Navigation bar colors
   const navBackground = isDark ? '#27272A' : '#FFFFFF';
   const activeColor = '#7C3AED';
   const inactiveColor = isDark ? '#71717A' : '#9CA3AF';
   const labelActiveColor = '#7C3AED';
   const labelInactiveColor = isDark ? '#A1A1AA' : '#6B7280';
-  
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -167,38 +164,47 @@ function DriverTabs() {
         headerShadowVisible: false,
       }}
     >
-      <Tab.Screen 
-        name="Dashboard" 
-        component={HomeScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Dashboard"
+        component={HomeScreen}
+        options={{
           tabBarIcon: ({ color, size }) => <LucideHome color={color} size={24} />,
           tabBarLabel: 'Home',
           headerTitle: 'Dashboard',
-        }} 
+        }}
       />
-      <Tab.Screen 
-        name="My QR" 
-        component={QRCodeScreen} 
-        options={{ 
+      <Tab.Screen
+        name="My QR"
+        component={QRCodeScreen}
+        options={{
           tabBarIcon: ({ color, size }) => <LucideQrCode color={color} size={24} />,
           headerTitle: 'My QR Code',
-        }} 
+        }}
       />
-      <Tab.Screen 
-        name="History" 
-        component={HistoryScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Map"
+        component={MapScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => <LucideMapPin color={color} size={24} />,
+          headerTitle: 'Live Map',
+          headerShown: false,
+        }}
+      />
+      <Tab.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
           tabBarIcon: ({ color, size }) => <LucideHistory color={color} size={24} />,
           headerTitle: 'Trip History',
-        }} 
+        }}
       />
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
           tabBarIcon: ({ color, size }) => <LucideUser color={color} size={24} />,
           headerTitle: 'Profile',
-        }} 
+        }}
       />
     </Tab.Navigator>
   );
@@ -208,14 +214,14 @@ function DriverTabs() {
 function PassengerTabs() {
   const { colors, typography, borderRadius, elevation, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  
+
   // Navigation bar colors
   const navBackground = isDark ? '#27272A' : '#FFFFFF';
   const activeColor = '#7C3AED';
   const inactiveColor = isDark ? '#71717A' : '#9CA3AF';
   const labelActiveColor = '#7C3AED';
   const labelInactiveColor = isDark ? '#A1A1AA' : '#6B7280';
-  
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -255,38 +261,47 @@ function PassengerTabs() {
         headerShadowVisible: false,
       }}
     >
-      <Tab.Screen 
-        name="Dashboard" 
-        component={HomeScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Dashboard"
+        component={HomeScreen}
+        options={{
           tabBarIcon: ({ color, size }) => <LucideHome color={color} size={24} />,
           tabBarLabel: 'Home',
           headerTitle: 'Dashboard',
-        }} 
+        }}
       />
-      <Tab.Screen 
-        name="Scan" 
-        component={ScanScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Scan"
+        component={ScanScreen}
+        options={{
           tabBarIcon: ({ color, size }) => <LucideScan color={color} size={24} />,
           headerTitle: 'Scan QR Code',
-        }} 
+        }}
       />
-      <Tab.Screen 
-        name="History" 
-        component={HistoryScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Map"
+        component={MapScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => <LucideMapPin color={color} size={24} />,
+          headerTitle: 'Live Map',
+          headerShown: false,
+        }}
+      />
+      <Tab.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
           tabBarIcon: ({ color, size }) => <LucideHistory color={color} size={24} />,
           headerTitle: 'My Trips',
-        }} 
+        }}
       />
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
           tabBarIcon: ({ color, size }) => <LucideUser color={color} size={24} />,
           headerTitle: 'Profile',
-        }} 
+        }}
       />
     </Tab.Navigator>
   );
@@ -295,7 +310,7 @@ function PassengerTabs() {
 // Loading Screen with Material 3 styling
 function LoadingScreen() {
   const { colors, typography } = useTheme();
-  
+
   return (
     <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
       <ActivityIndicator size="large" color={colors.primary} />
@@ -333,7 +348,7 @@ function Navigation() {
   };
 
   return (
-    <NavigationContainer 
+    <NavigationContainer
       linking={linking}
       theme={{
         dark: isDark,
@@ -374,33 +389,33 @@ function Navigation() {
       >
         {isPasswordRecovery ? (
           // Password Reset Flow
-          <Stack.Screen 
-            name="ResetPassword" 
+          <Stack.Screen
+            name="ResetPassword"
             component={ResetPasswordScreen}
           />
         ) : !session ? (
           // Auth Stack
           <>
-            <Stack.Screen 
-              name="Login" 
+            <Stack.Screen
+              name="Login"
               component={LoginScreen}
               options={{
                 animationTypeForReplace: !session ? 'pop' : 'push',
               }}
             />
-            <Stack.Screen 
-              name="Register" 
+            <Stack.Screen
+              name="Register"
               component={RegisterScreen}
             />
-            <Stack.Screen 
-              name="ForgotPassword" 
+            <Stack.Screen
+              name="ForgotPassword"
               component={ForgotPasswordScreen}
             />
           </>
         ) : (
           // Main App Stack
-          <Stack.Screen 
-            name="Main" 
+          <Stack.Screen
+            name="Main"
             component={getMainComponent()}
           />
         )}
@@ -434,6 +449,11 @@ const styles = StyleSheet.create({
 
 export default function App() {
   console.log('App Root Mounting');
+
+  useEffect(() => {
+    testPushToken();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
