@@ -103,7 +103,7 @@ export async function startLocationTracking(onLocationUpdate, options = {}) {
         const defaultOptions = {
             accuracy: Location.Accuracy.High,
             distanceInterval: 5,        // Update every 5 meters of movement
-            timeInterval: 5000,          // Update every 5 seconds
+            timeInterval: 1000,          // Update every 1 second
             ...options,
         };
 

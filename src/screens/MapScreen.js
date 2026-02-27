@@ -41,6 +41,7 @@ import {
     LucideCheckCircle2,
     LucideAlertTriangle,
     LucideX,
+    LucideRefreshCw,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -60,7 +61,6 @@ import {
     calculateDistance,
 } from '../utils/locationService';
 import { supabase } from '../lib/supabase';
-import CarModel3D from '../components/CarModel3D';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -130,6 +130,7 @@ export default function MapScreen() {
     const [showStartModal, setShowStartModal] = useState(false);
     const [showEndModal, setShowEndModal] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [isFollowing, setIsFollowing] = useState(true);
     const toastAnim = useRef(new Animated.Value(-100)).current;
     const expandAnim = useRef(new Animated.Value(1)).current;
 
@@ -395,16 +396,35 @@ export default function MapScreen() {
         };
     }, [isDriver, activeTrip?.id]);
 
+    // Auto-follow logic
+    useEffect(() => {
+        if (!isFollowing || !mapRef.current) return;
+
+        const loc = isDriver ? currentLocation?.coords : driverLocation;
+        if (loc) {
+            mapRef.current.animateToRegion({
+                latitude: loc.latitude,
+                longitude: loc.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+            }, 1000);
+        }
+    }, [isFollowing, isDriver, currentLocation?.coords.latitude, currentLocation?.coords.longitude, driverLocation?.latitude, driverLocation?.longitude]);
+
     // Center map on current location
     const centerOnLocation = useCallback(() => {
-        if (!currentLocation || !mapRef.current) return;
-        mapRef.current.animateToRegion({
-            latitude: currentLocation.coords.latitude,
-            longitude: currentLocation.coords.longitude,
-            latitudeDelta: 0.005,
-            longitudeDelta: 0.005,
-        }, 500);
-    }, [currentLocation]);
+        if (!mapRef.current) return;
+        setIsFollowing(true);
+        const loc = isDriver ? currentLocation?.coords : driverLocation;
+        if (loc) {
+            mapRef.current.animateToRegion({
+                latitude: loc.latitude,
+                longitude: loc.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+            }, 500);
+        }
+    }, [currentLocation, driverLocation, isDriver]);
 
     // Toggle map type
     const toggleMapType = useCallback(() => {
@@ -448,6 +468,23 @@ export default function MapScreen() {
     const confirmEndTrip = useCallback(() => {
         setShowEndModal(true);
     }, []);
+
+    // Manual Refresh Logic
+    const handleManualRefresh = useCallback(async () => {
+        try {
+            const location = await getCurrentLocation();
+            if (location) {
+                setCurrentLocation(location);
+                setLastUpdated(new Date());
+                // If on a trip, sync with DB too
+                if (isDriver && activeTrip?.id) {
+                    updateTripLocation(activeTrip.id, location);
+                }
+            }
+        } catch (error) {
+            console.error('Manual refresh failed:', error);
+        }
+    }, [isDriver, activeTrip?.id]);
 
     // Share trip
     const handleShareTrip = useCallback(async () => {
@@ -609,6 +646,7 @@ export default function MapScreen() {
                 scrollEnabled={true}
                 pitchEnabled={true}
                 onMapReady={() => setIsMapReady(true)}
+                onPanDrag={() => setIsFollowing(false)}
                 onPress={(e) => {
                     if (e.nativeEvent.coordinate) {
                         setMockDestination(e.nativeEvent.coordinate);
@@ -647,6 +685,7 @@ export default function MapScreen() {
                 )}
 
                 {/* Driver's car marker - 2D version (hidden, just for tracking if needed) */}
+                {/* Driver's car marker - 2D Pointer */}
                 {isDriver && currentLocation && (
                     <Marker
                         coordinate={{
@@ -656,13 +695,14 @@ export default function MapScreen() {
                         anchor={{ x: 0.5, y: 0.5 }}
                         flat={true}
                         rotation={heading}
-                        opacity={0} // Hide native marker
                     >
-                        <View style={{ width: 48, height: 48 }} />
+                        <View style={styles.pointerContainer}>
+                            <LucideNavigation size={32} color="#22C55E" fill="#22C55E" />
+                        </View>
                     </Marker>
                 )}
 
-                {/* Passenger viewing driver's location - 2D version (hidden) */}
+                {/* Passenger viewing driver's location - 2D Pointer */}
                 {!isDriver && driverLocation && (
                     <Marker
                         coordinate={{
@@ -672,19 +712,13 @@ export default function MapScreen() {
                         anchor={{ x: 0.5, y: 0.5 }}
                         flat={true}
                         rotation={driverLocation.heading || 0}
-                        opacity={0} // Hide native marker
                     >
-                        <View style={{ width: 48, height: 48 }} />
+                        <View style={styles.pointerContainer}>
+                            <LucideNavigation size={32} color="#3B82F6" fill="#3B82F6" />
+                        </View>
                     </Marker>
                 )}
             </MapView>
-
-            {/* Floating 3D Car Overlay rendering over the center of the map */}
-            <View style={styles.floating3DContainer} pointerEvents="none">
-                {(isDriver && currentLocation) || (!isDriver && driverLocation) ? (
-                    <CarModel3D />
-                ) : null}
-            </View>
 
             {/* FABs */}
             <View style={styles.fabContainer}>
@@ -726,16 +760,30 @@ export default function MapScreen() {
 
                 {/* Share trip */}
                 {activeTrip && (
-                    <TouchableOpacity
-                        style={[styles.fab, styles.fabSmall, {
-                            backgroundColor: isDark ? '#27272A' : '#FFFFFF',
-                            ...elevation.level2,
-                        }]}
-                        onPress={handleShareTrip}
-                        activeOpacity={0.7}
-                    >
-                        <LucideShare2 size={20} color={colors.onSurface} />
-                    </TouchableOpacity>
+                    <>
+                        <TouchableOpacity
+                            style={[styles.fab, styles.fabSmall, {
+                                backgroundColor: isDark ? '#27272A' : '#FFFFFF',
+                                ...elevation.level2,
+                            }]}
+                            onPress={handleShareTrip}
+                            activeOpacity={0.7}
+                        >
+                            <LucideShare2 size={20} color={colors.onSurface} />
+                        </TouchableOpacity>
+
+                        {/* Manual Refresh button beneath Share - only visible during trip or if searching is not active */}
+                        <TouchableOpacity
+                            style={[styles.fab, styles.fabSmall, {
+                                backgroundColor: isDark ? '#27272A' : '#FFFFFF',
+                                ...elevation.level2,
+                            }]}
+                            onPress={handleManualRefresh}
+                            activeOpacity={0.7}
+                        >
+                            <LucideRefreshCw size={20} color={colors.primary} />
+                        </TouchableOpacity>
+                    </>
                 )}
             </View>
 
@@ -1091,15 +1139,9 @@ const styles = StyleSheet.create({
     map: {
         flex: 1,
     },
-    floating3DContainer: {
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        marginLeft: -30, // half of 60px (CarModel3D width)
-        marginTop: -30,  // half of 60px
-        width: 60,
-        height: 60,
-        zIndex: 5,
+    pointerContainer: {
+        width: 40,
+        height: 40,
         alignItems: 'center',
         justifyContent: 'center',
     },
