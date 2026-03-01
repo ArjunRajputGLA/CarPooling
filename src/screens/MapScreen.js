@@ -60,6 +60,7 @@ import {
     formatSpeed,
     calculateDistance,
 } from '../utils/locationService';
+import { getRecentSearches, saveRecentSearches } from '../utils/storage';
 import { supabase } from '../lib/supabase';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -124,11 +125,13 @@ export default function MapScreen() {
     const [routeInfo, setRouteInfo] = useState({ distance: 0, duration: 0 });
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [recentSearches, setRecentSearches] = useState([]);
     const [predictions, setPredictions] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isCardExpanded, setIsCardExpanded] = useState(true);
     const [showStartModal, setShowStartModal] = useState(false);
     const [showEndModal, setShowEndModal] = useState(false);
+    const [showDestinationRequiredModal, setShowDestinationRequiredModal] = useState(false);
     const [showToast, setShowToast] = useState(false);
     const [isFollowing, setIsFollowing] = useState(true);
     const toastAnim = useRef(new Animated.Value(-100)).current;
@@ -196,6 +199,12 @@ export default function MapScreen() {
         setSearchQuery(description);
         setPredictions([]);
 
+        // Add to recent searches
+        const newSearch = { place_id: placeId, description };
+        const updatedSearches = [newSearch, ...recentSearches.filter(s => s.place_id !== placeId)].slice(0, 5);
+        setRecentSearches(updatedSearches);
+        saveRecentSearches(updatedSearches);
+
         try {
             const res = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry&key=${process.env.EXPO_PUBLIC_MAPS_API}`);
             const data = await res.json();
@@ -229,8 +238,14 @@ export default function MapScreen() {
     const [hasPermission, setHasPermission] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Entrance animation
+    // Entrance animation and recent searches
     useEffect(() => {
+        const loadRecents = async () => {
+             const searches = await getRecentSearches();
+             if (searches) setRecentSearches(searches);
+        };
+        loadRecents();
+
         Animated.timing(fadeAnim, {
             toValue: 1,
             duration: 400,
@@ -328,7 +343,7 @@ export default function MapScreen() {
                 if (isDriver && activeTrip?.id) {
                     updateTripLocation(activeTrip.id, location);
                 }
-            });
+            }, { distanceInterval: 0, timeInterval: 1000 });
         };
 
         startTracking();
@@ -452,8 +467,12 @@ export default function MapScreen() {
 
     // Actual Start Trip Action
     const confirmStartTrip = useCallback(() => {
+        if (!mockDestination) {
+            setShowDestinationRequiredModal(true);
+            return;
+        }
         setShowStartModal(true);
-    }, []);
+    }, [mockDestination]);
 
     // End trip (driver only)
     const handleEndTrip = useCallback(async () => {
@@ -461,6 +480,10 @@ export default function MapScreen() {
         setIsTripLoading(true);
         await endActiveTrip(activeTrip.id);
         setActiveTrip(null);
+        // Clear destination and route info when trip ends
+        setMockDestination(null);
+        setRouteInfo({ distance: 0, duration: 0 });
+        setSearchQuery('');
         setIsTripLoading(false);
         setShowEndModal(false);
     }, [activeTrip?.id]);
@@ -591,7 +614,7 @@ export default function MapScreen() {
                             value={searchQuery}
                             onChangeText={searchPlaces}
                             onFocus={() => setIsSearching(true)}
-                            onBlur={() => { if (!searchQuery) setIsSearching(false); }}
+                            // onBlur handled by map press
                         />
                     </View>
                     <View style={styles.topBarRight}>
@@ -611,13 +634,16 @@ export default function MapScreen() {
                 )}
             </View>
 
-            {/* Predictions List */}
-            {isSearching && predictions.length > 0 && (
+            {/* Predictions List or Recent Searches */}
+            {isSearching && (predictions.length > 0 || (searchQuery.length === 0 && recentSearches.length > 0)) && (
                 <View style={[styles.predictionsContainer, { backgroundColor: isDark ? '#27272A' : '#FFFFFF', ...elevation.level2 }]}>
+                    {searchQuery.length === 0 && (
+                        <Text style={{ padding: 12, paddingBottom: 4, fontSize: 12, color: colors.onSurfaceVariant, fontWeight: '600' }}>RECENT SEARCHES</Text>
+                    )}
                     <FlatList
-                        data={predictions}
+                        data={predictions.length > 0 ? predictions : recentSearches}
                         keyExtractor={(item) => item.place_id}
-                        keyboardShouldPersistTaps="handled"
+                        keyboardShouldPersistTaps="always"
                         renderItem={({ item }) => (
                             <TouchableOpacity style={[styles.predictionItem, { borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]} onPress={() => selectPlace(item.place_id, item.description)}>
                                 <LucideMapPin size={16} color={colors.onSurfaceVariant} style={{ marginRight: 12 }} />
@@ -647,10 +673,9 @@ export default function MapScreen() {
                 pitchEnabled={true}
                 onMapReady={() => setIsMapReady(true)}
                 onPanDrag={() => setIsFollowing(false)}
-                onPress={(e) => {
-                    if (e.nativeEvent.coordinate) {
-                        setMockDestination(e.nativeEvent.coordinate);
-                    }
+                onPress={() => {
+                    Keyboard.dismiss();
+                    setIsSearching(false);
                 }}
             >
                 {/* Route drawing feature */}
@@ -758,32 +783,30 @@ export default function MapScreen() {
                     <LucideCrosshair size={20} color={colors.primary} />
                 </TouchableOpacity>
 
+                {/* Manual Refresh - Always visible beneath Recenter */}
+                <TouchableOpacity
+                    style={[styles.fab, styles.fabSmall, {
+                        backgroundColor: isDark ? '#27272A' : '#FFFFFF',
+                        ...elevation.level2,
+                    }]}
+                    onPress={handleManualRefresh}
+                    activeOpacity={0.7}
+                >
+                    <LucideRefreshCw size={20} color={colors.primary} />
+                </TouchableOpacity>
+
                 {/* Share trip */}
                 {activeTrip && (
-                    <>
-                        <TouchableOpacity
-                            style={[styles.fab, styles.fabSmall, {
-                                backgroundColor: isDark ? '#27272A' : '#FFFFFF',
-                                ...elevation.level2,
-                            }]}
-                            onPress={handleShareTrip}
-                            activeOpacity={0.7}
-                        >
-                            <LucideShare2 size={20} color={colors.onSurface} />
-                        </TouchableOpacity>
-
-                        {/* Manual Refresh button beneath Share - only visible during trip or if searching is not active */}
-                        <TouchableOpacity
-                            style={[styles.fab, styles.fabSmall, {
-                                backgroundColor: isDark ? '#27272A' : '#FFFFFF',
-                                ...elevation.level2,
-                            }]}
-                            onPress={handleManualRefresh}
-                            activeOpacity={0.7}
-                        >
-                            <LucideRefreshCw size={20} color={colors.primary} />
-                        </TouchableOpacity>
-                    </>
+                    <TouchableOpacity
+                        style={[styles.fab, styles.fabSmall, {
+                            backgroundColor: isDark ? '#27272A' : '#FFFFFF',
+                            ...elevation.level2,
+                        }]}
+                        onPress={handleShareTrip}
+                        activeOpacity={0.7}
+                    >
+                        <LucideShare2 size={20} color={colors.onSurface} />
+                    </TouchableOpacity>
                 )}
             </View>
 
@@ -1006,6 +1029,36 @@ export default function MapScreen() {
                                     ) : (
                                         <Text style={styles.modalPrimaryButtonText}>End Trip</Text>
                                     )}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Destination Required Modal */}
+            <Modal
+                visible={showDestinationRequiredModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowDestinationRequiredModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#27272A' : '#FFFFFF' }]}>
+                        <View style={[styles.modalHeader, { backgroundColor: '#F59E0B' }]}>
+                            <LucideMapPin color="#FFFFFF" size={32} />
+                        </View>
+                        <View style={styles.modalBody}>
+                            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Destination Required</Text>
+                            <Text style={[styles.modalText, { color: colors.onSurfaceVariant }]}>
+                                Please select a destination on the map or search for a location to start the trip.
+                            </Text>
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity
+                                    style={[styles.modalPrimaryButton, { backgroundColor: '#F59E0B' }]}
+                                    onPress={() => setShowDestinationRequiredModal(false)}
+                                >
+                                    <Text style={styles.modalPrimaryButtonText}>OK</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>

@@ -6,6 +6,26 @@ const STORAGE_KEYS = {
   REMEMBER_ME: '@carpooling_remember_me',
   USER_PREFERENCES: '@carpooling_user_preferences',
   THEME: '@carpooling_theme',
+  RECENT_SEARCHES: '@carpooling_recent_searches',
+};
+
+// Recent Searches functionality
+export const saveRecentSearches = async (searches) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.RECENT_SEARCHES, JSON.stringify(searches));
+  } catch (error) {
+    console.error('Error saving recent searches:', error);
+  }
+};
+
+export const getRecentSearches = async () => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(STORAGE_KEYS.RECENT_SEARCHES);
+    return jsonValue != null ? JSON.parse(jsonValue) : [];
+  } catch (error) {
+    console.error('Error getting recent searches:', error);
+    return [];
+  }
 };
 
 // Remember email functionality
