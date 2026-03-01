@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ShareWheels",
-    "slug": "carpooling-app",
+    "slug": "sharewheels",
     "scheme": "carpooling",
     "version": "1.0.0",
     "orientation": "portrait",
