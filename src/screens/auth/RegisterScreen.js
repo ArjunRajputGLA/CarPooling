@@ -359,25 +359,6 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
-      // 5. Show success message
-      setSuccessDialog({ visible: true, role });
-
-      // If session exists, user is already logged in (email confirmation disabled)
-      // The auth state listener in AuthContext will handle navigation automatically
-      // No need to navigate manually
-
-    } catch (error) {
-      console.error('Registration error:', error);
-      
-      let errorMessage = 'Registration failed. Please try again.';
-      
-      if (error.message?.includes('already registered') || error.message?.includes('already been registered') || error.message?.includes('already exists') || error.message?.includes('User already registered')) {
-        setAccountExistsDialog(true);
-        return;
-      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-        errorMessage = 'Network error. Please check your internet connection.';
-      } else if (error.message?.includes('Password')) {
-        errorMessage = error.message;
       } else if (error.code === '42501') {
         // RLS policy error - profile creation failed but user was created
         setSuccessDialog({ visible: true, role: 'passenger', needsLogin: true });
