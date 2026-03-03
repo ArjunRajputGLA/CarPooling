@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { LucideCarFront, LucideUser, LucideMail, LucideLock, LucidePhone, LucideMapPin, LucideAlertCircle } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
   validateEmail,
@@ -41,6 +42,7 @@ import {
 const DRIVER_EMAIL = 'imstorm23203@gmail.com';
 
 export default function RegisterScreen({ navigation }) {
+  const { signUp } = useAuth();
   const { colors, typography, borderRadius, elevation, spacing, isDark } = useTheme();
   
   // Animation refs
@@ -253,50 +255,50 @@ export default function RegisterScreen({ navigation }) {
     setLoading(true);
 
     try {
-      // 1. Create user in Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: email.toLowerCase().trim(),
-        password: password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-            role: email.toLowerCase().trim() === DRIVER_EMAIL ? 'driver' : 'passenger',
-          },
-          // Skip email confirmation
-          emailRedirectTo: undefined,
-        },
-      });
+      // 1. Create user via Backend API
+      const { user: authUser, session } = await signUp(
+        email.toLowerCase().trim(),
+        password,
+        {
+          full_name: fullName.trim(),
+          role: email.toLowerCase().trim() === DRIVER_EMAIL ? 'driver' : 'passenger',
+        }
+      );
 
-      if (authError) throw authError;
-
-      if (!authData.user) {
+      if (!authUser) {
         throw new Error('Failed to create user account');
       }
 
-      // Check if session exists (email confirmation disabled)
-      const hasSession = !!authData.session;
-
-      const userId = authData.user.id;
+      console.log('User registered successfully:', authUser.id);
+      
+      const userId = authUser.id;
       let profilePictureUrl = null;
 
       // 2. Upload profile picture if provided
       if (profileImage) {
         setImageLoading(true);
-        const uploadResult = await uploadProfilePicture(userId, profileImage);
-        setImageLoading(false);
-        
-        if (uploadResult.success) {
-          profilePictureUrl = uploadResult.url;
-        } else {
-          // Show warning but continue with registration
-          showToastMessage('Profile picture upload failed. You can add it later.', 'warning');
+        try {
+            // This relies on the session being set in AuthContext->signUp
+            const uploadResult = await uploadProfilePicture(userId, profileImage);
+            if (uploadResult.success) {
+                profilePictureUrl = uploadResult.url;
+            } else {
+                showToastMessage('Profile picture upload failed. You can add it later.', 'warning');
+            }
+        } catch (uploadError) {
+             console.log('Profile picture upload error:', uploadError);
+             showToastMessage('Profile picture upload failed.', 'warning');
+        } finally {
+            setImageLoading(false);
         }
       }
 
       // 3. Determine role based on email
       const role = email.toLowerCase().trim() === DRIVER_EMAIL ? 'driver' : 'passenger';
-
+      
       // 4. Insert user data into public.users table (only columns that exist)
+      // Note: AuthContext might have already tried to create a profile, but here we add extra fields
+      // like home_address and emergency contacts which are not in metadata
       const userData = {
         id: userId,
         email: email.toLowerCase().trim(),
@@ -309,14 +311,53 @@ export default function RegisterScreen({ navigation }) {
         home_address: homeAddress.trim() || null,
       };
 
-      const { error: profileError } = await supabase
-        .from('users')
-        .upsert(userData);
+      try {
+          const { error: profileError } = await supabase
+            .from('users')
+            .upsert(userData);
 
-      if (profileError) {
-        console.error('Profile insert error:', profileError);
-        // Don't throw here, the trigger might have already created the user
+          if (profileError) {
+            console.error('Profile insert error:', profileError);
+            // Don't throw here, the trigger might have already created the user
+          }
+      } catch (upsertError) {
+          console.error('Profile upsert exception:', upsertError);
       }
+
+      // Show success dialog
+      setSuccessDialog({
+        visible: true,
+        role: role === 'driver' ? 'Driver' : 'Passenger',
+        needsLogin: false // Already logged in via signUp
+      });
+
+    } catch (error) {
+      console.error('Registration error:', error);
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      
+      if (error.message) {
+        if (error.message.includes('already registered')) {
+          errorMessage = 'This email is already registered. Please login instead.';
+          setAccountExistsDialog(true);
+          return;
+        } else if (error.message.includes('Password')) {
+          errorMessage = error.message;
+        } else if (error.message.includes('Network')) {
+          errorMessage = 'Network connection failed. Please check your internet.';
+        } else {
+             errorMessage = error.message;
+        }
+      }
+
+      setErrorDialog({
+        visible: true,
+        title: 'Registration Failed',
+        message: errorMessage,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
       // 5. Show success message
       setSuccessDialog({ visible: true, role });

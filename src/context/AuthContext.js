@@ -4,6 +4,8 @@ import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { api } from '../services/api';
+
 // Session timeout configuration (in milliseconds)
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const ACTIVITY_CHECK_INTERVAL = 60 * 1000; // Check every 1 minute
@@ -98,7 +100,6 @@ export const AuthProvider = ({ children }) => {
         }
     }, []);
 
-    // Check if session has timed out
     const checkSessionTimeout = useCallback(async () => {
         try {
             const lastActivity = await AsyncStorage.getItem(LAST_ACTIVITY_KEY);
@@ -479,21 +480,57 @@ export const AuthProvider = ({ children }) => {
         setAuthError(null);
         
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: email.toLowerCase().trim(),
-                password,
-            });
+            // Use backend API instead of direct Supabase call
+            const { session, user } = await api.auth.login(email.toLowerCase().trim(), password);
             
-            if (error) {
-                const friendlyMessage = getErrorMessage(error);
-                setAuthError(friendlyMessage);
-                throw new Error(friendlyMessage);
+            if (!session || !user) {
+                throw new Error('Invalid login response from server');
+            }
+
+            // Manually set the session in Supabase client for DB access
+            const { error: sessionError } = await supabase.auth.setSession({
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+            });
+
+            if (sessionError) {
+                console.error('Failed to set session in Supabase client:', sessionError);
+                // We continue anyway as we have the session from backend
             }
             
             // Set initial activity timestamp on successful login
             await updateLastActivity();
             
-            return data;
+            return { session, user };
+        } catch (e) {
+            const friendlyMessage = getErrorMessage(e);
+            setAuthError(friendlyMessage);
+            throw new Error(friendlyMessage);
+        }
+    };
+
+    // Sign up with email and password
+    const signUp = async (email, password, metadata = {}) => {
+        setAuthError(null);
+        try {
+            // Use backend API instead of direct Supabase call
+            const { session, user } = await api.auth.signup(email.toLowerCase().trim(), password, metadata);
+
+            if (session && user) {
+                 // Manually set the session in Supabase client for DB access
+                 const { error: sessionError } = await supabase.auth.setSession({
+                    access_token: session.access_token,
+                    refresh_token: session.refresh_token,
+                });
+                
+                if (sessionError) {
+                     console.error('Failed to set session in Supabase client:', sessionError);
+                }
+                
+                await updateLastActivity();
+            }
+            
+            return { session, user };
         } catch (e) {
             const friendlyMessage = getErrorMessage(e);
             setAuthError(friendlyMessage);
