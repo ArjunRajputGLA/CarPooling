@@ -538,40 +538,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Sign up new user
-    const signUp = async (email, password, userData = {}) => {
-        setAuthError(null);
-        
-        try {
-            // Determine role based on email
-            const role = getRoleForEmail(email);
-            
-            const { data, error } = await supabase.auth.signUp({
-                email: email.toLowerCase().trim(),
-                password,
-                options: {
-                    data: {
-                        role,
-                        full_name: userData.fullName || '',
-                        phone: userData.phone || '',
-                        ...userData,
-                    },
-                },
-            });
-            
-            if (error) {
-                const friendlyMessage = getErrorMessage(error);
-                setAuthError(friendlyMessage);
-                throw new Error(friendlyMessage);
-            }
-            
-            return { ...data, role };
-        } catch (e) {
-            const friendlyMessage = getErrorMessage(e);
-            setAuthError(friendlyMessage);
-            throw new Error(friendlyMessage);
-        }
-    };
+
 
     // Sign out
     const signOut = async (showConfirm = true) => {
